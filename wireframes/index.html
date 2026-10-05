@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CourseCrusher — UI wireframe</title>
+<style>
+:root{
+  --ink:#12151a;
+  --ink-2:#1b2027;
+  --surface:#ffffff;
+  --canvas:#f5f6f8;
+  --line:#e2e5ea;
+  --line-strong:#cfd4dc;
+  --text:#12151a;
+  --muted:#616b7a;
+  --faint:#8b94a3;
+  --brand:#158158;
+
+  /* effort tiers */
+  --deep:#4338ca;
+  --deep-bg:#eceafb;
+  --shallow:#0f766e;
+  --shallow-bg:#e3f2f0;
+  --low:#a16207;
+  --low-bg:#f8efdc;
+
+  --r-sm:8px;
+  --r:12px;
+  --r-lg:16px;
+  --sp:16px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  background:var(--canvas);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+
+.skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:#fff;padding:8px 12px;z-index:99}
+.skip:focus{left:8px;top:8px}
+
+/* ───────── shell ───────── */
+.app{display:grid;grid-template-columns:232px 1fr;height:100vh;overflow:hidden}
+
+/* ───────── sidebar ───────── */
+.sidebar{background:var(--ink);color:#fff;display:flex;flex-direction:column;padding:18px 14px}
+.brand{display:flex;align-items:center;gap:9px;padding:4px 8px 20px}
+.brand .mark{width:22px;height:22px;border-radius:6px;background:var(--brand);display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff}
+.brand .name{font-weight:650;letter-spacing:-.2px;font-size:14.5px}
+
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#6f7a8a;padding:14px 8px 6px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);color:#c3cad4;text-decoration:none;font-size:13.5px}
+.nav a .ic{width:16px;text-align:center;opacity:.85;font-size:13px}
+.nav a[aria-current="page"]{background:#262c36;color:#fff;font-weight:600}
+.nav a .count{margin-left:auto;font-size:11px;color:#8b94a3;font-variant-numeric:tabular-nums}
+
+.side-foot{margin-top:auto;border-top:1px solid #262c36;padding-top:12px}
+.kbd-hint{display:flex;align-items:center;gap:8px;padding:8px 10px;color:#8b94a3;font-size:12px}
+.kbd{border:1px solid #39414d;border-bottom-width:2px;border-radius:5px;padding:1px 5px;font-size:10.5px;color:#c3cad4;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.who{display:flex;align-items:center;gap:9px;padding:8px 10px}
+.who .av{width:28px;height:28px;flex:none;border-radius:50%;background:#39414d;display:grid;place-items:center;font-size:11px;font-weight:600;color:#e7eaee}
+.who .meta-w{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.who .nm{font-size:12.5px;color:#e7eaee}
+.who .sub{font-size:11px;color:#7c8695}
+
+/* ───────── main ───────── */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+
+.topbar{
+  height:60px;flex:none;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 22px;
+}
+.topbar h1{font-size:17px;font-weight:650;letter-spacing:-.25px;margin:0}
+.topbar .date{color:var(--muted);font-size:13px}
+.topbar .sp{flex:1}
+
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-strong);background:var(--surface);
+  border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--text);white-space:nowrap}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--brand)}
+.pill .cap{color:var(--muted)}
+.pill.sel::after{content:"▾";color:var(--faint);font-size:10px;margin-left:1px}
+
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  background:var(--surface);padding:6px 10px;width:190px;color:var(--faint);font-size:12.5px}
+.search .kbd{border-color:var(--line-strong);color:var(--faint);margin-left:auto}
+.av-top{width:30px;height:30px;border-radius:50%;background:#dfe3e9;display:grid;place-items:center;font-size:11.5px;font-weight:650;color:#4a5361}
+
+.content{flex:1;overflow:auto;padding:16px 22px 18px}
+.panel[hidden]{display:none}
+
+.cols{display:grid;grid-template-columns:1fr 344px;gap:18px;align-items:start}
+/* grid items default to min-width:auto, which lets the nowrap task titles
+   widen the whole column instead of ellipsing */
+.cols > *{min-width:0}
+
+/* ───────── cards ───────── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
+.card + .card{margin-top:13px}
+.card-h{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+.card-h h2{font-size:13px;font-weight:650;margin:0;letter-spacing:-.1px}
+.card-h .sp{flex:1}
+.card-h .aside{font-size:11.5px;color:var(--faint)}
+
+/* hero */
+.hero{padding:18px 20px 18px;border-color:var(--line-strong);box-shadow:0 1px 2px rgba(18,21,26,.05)}
+.eyebrow{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:650}
+.eyebrow .agent{display:inline-flex;align-items:center;gap:5px;color:var(--brand)}
+.eyebrow .agent .sparkle{font-size:11px}
+.hero h3{font-size:20px;line-height:1.3;font-weight:650;letter-spacing:-.4px;margin:9px 0 0;max-width:46ch}
+.hero .course{margin-top:5px;font-size:13px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:600;border:1px solid transparent}
+.chip .cdot{width:7px;height:7px;border-radius:50%}
+.chip.deep{background:var(--deep-bg);color:var(--deep)}
+.chip.deep .cdot{background:var(--deep)}
+.chip.shallow{background:var(--shallow-bg);color:var(--shallow)}
+.chip.shallow .cdot{background:var(--shallow)}
+.chip.low{background:var(--low-bg);color:var(--low)}
+.chip.low .cdot{background:var(--low)}
+.chip.plain{background:var(--canvas);color:var(--muted);border-color:var(--line)}
+.chip.warn{background:#fdecec;color:#b3261e}
+
+.why{margin-top:13px;background:var(--canvas);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 13px;font-size:12.5px;color:#39414d;line-height:1.5}
+.why b{color:var(--text);font-weight:650}
+
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r-sm);
+  padding:9px 15px;font-size:13px;font-weight:600;letter-spacing:-.1px}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);font-weight:500}
+.btn .kbd{margin-left:7px;border-color:var(--line-strong)}
+.btn.primary .kbd{border-color:#414954;color:#c3cad4}
+
+/* queue */
+.rows{padding:8px 8px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:var(--r);min-height:52px}
+.row + .row{border-top:1px solid var(--line)}
+.row .tier{width:9px;height:9px;border-radius:50%;flex:none}
+.row .tier.deep{background:var(--deep)}
+.row .tier.shallow{background:var(--shallow)}
+.row .tier.low{background:var(--low)}
+.row .txt{min-width:0;flex:1}
+.row .t{font-size:13.5px;font-weight:600;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .s{font-size:12px;color:var(--muted);margin-top:2px}
+.row .right{display:flex;align-items:center;gap:14px;flex:none}
+.row .slot{font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600}
+.row .dur{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;width:46px;text-align:right}
+.row .grab{color:var(--line-strong);font-size:13px;letter-spacing:-2px}
+
+/* weekly load */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;padding:11px 16px 14px}
+.stats .n{font-size:21px;font-weight:650;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.stats .l{font-size:11.5px;color:var(--muted);margin-top:1px}
+.stats .bar{height:4px;border-radius:999px;background:var(--canvas);margin-top:9px;overflow:hidden}
+.stats .bar i{display:block;height:100%;border-radius:999px;background:var(--line-strong)}
+.stats .bar i.deep{background:var(--deep)}
+.stats .bar i.shallow{background:var(--shallow)}
+.stats .bar i.low{background:var(--low)}
+.stats .bar i.risk{background:#b3261e}
+
+/* legend */
+.legend{display:flex;gap:12px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* ───────── timeline ───────── */
+.tl{padding:12px 16px 16px}
+.tl-row{display:grid;grid-template-columns:44px 1fr;gap:10px;min-height:34px}
+.tl-row .hr{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;padding-top:9px;text-align:right}
+.tl-row .lane{border-top:1px solid var(--line);padding:4px 0 4px}
+.blk{border-radius:var(--r-sm);padding:6px 9px;font-size:11.5px;line-height:1.3}
+.blk .bt{font-weight:650}
+.blk .bs{font-size:10.5px;opacity:.9;margin-top:1px}
+.blk.fixed{background:#eef0f3;color:#4a5361;border:1px solid var(--line)}
+.blk.deep{background:var(--deep-bg);color:var(--deep);border:1px solid #d8d3f6}
+.blk.shallow{background:var(--shallow-bg);color:var(--shallow);border:1px solid #cbe6e2}
+.blk.low{background:var(--low-bg);color:var(--low);border:1px solid #ecdcbd}
+.blk.free{border:1px dashed var(--line-strong);color:var(--faint);background:transparent}
+
+/* connections */
+.conn{padding:6px 16px 14px}
+.conn .c{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:12.5px}
+.conn .c + .c{border-top:1px solid var(--line)}
+.conn .ic{width:24px;height:24px;border-radius:6px;background:var(--canvas);border:1px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--muted)}
+.conn .nm{font-weight:600}
+.conn .st{margin-left:auto;font-size:11.5px;color:var(--brand);display:inline-flex;align-items:center;gap:5px}
+.conn .st i{width:6px;height:6px;border-radius:50%;background:var(--brand);display:inline-block}
+.conn .st.err{color:#b3261e}
+.conn .st.err i{background:#b3261e}
+
+/* terminal */
+.term{background:var(--ink);border-radius:var(--r);margin:0 16px 16px;padding:11px 13px;
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;line-height:1.7;color:#c3cad4}
+.term .p{color:#5fb98f}
+.term .o{color:#8b94a3}
+.term .hl{color:#fff}
+
+/* ───────── breakdown panel ───────── */
+.src{padding:14px 16px;border-bottom:1px solid var(--line)}
+.src .lbl{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;font-weight:650}
+.src .q{margin-top:8px;font-size:12.5px;color:#39414d;line-height:1.55;border-left:2px solid var(--line-strong);padding-left:11px}
+.sub{display:flex;align-items:flex-start;gap:12px;padding:12px 16px}
+.sub + .sub{border-top:1px solid var(--line)}
+.box{width:17px;height:17px;border:1.5px solid var(--line-strong);border-radius:5px;flex:none;margin-top:2px;display:grid;place-items:center;font-size:10px;color:#fff}
+.box.on{background:var(--ink);border-color:var(--ink)}
+.sub .body{flex:1;min-width:0}
+.sub .t{font-size:13.5px;font-weight:600;letter-spacing:-.1px}
+.sub .m{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.sub .when{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.foot{display:flex;align-items:center;gap:10px;padding:13px 16px;border-top:1px solid var(--line);background:var(--canvas);border-radius:0 0 var(--r-lg) var(--r-lg)}
+.foot .note{font-size:11.5px;color:var(--muted);margin-left:auto;text-align:right}
+
+.stub{padding:38px 20px;text-align:center;color:var(--faint)}
+.stub .t{font-size:14px;font-weight:650;color:var(--muted)}
+.stub .s{font-size:12.5px;margin-top:5px}
+
+/* ───────── mobile ───────── */
+.tabbar{display:none}
+.mobile-ctx{display:none}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;height:100vh}
+  .sidebar{display:none}
+  .cols{grid-template-columns:1fr;gap:14px}
+
+  .topbar{height:54px;padding:0 14px;gap:10px}
+  .topbar h1{font-size:16px}
+  .topbar .date,.topbar .search,.topbar .pill{display:none}
+
+  .mobile-ctx{display:flex;gap:8px;padding:11px 14px;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto}
+  .mobile-ctx .pill{display:inline-flex;flex:none;padding:8px 13px;font-size:13px;min-height:38px}
+
+  .content{padding:14px 14px 84px}
+  .hero{padding:16px}
+  .hero h3{font-size:18px}
+  .actions{gap:8px}
+  .actions .btn{flex:1;min-height:46px;text-align:center}
+  .actions .btn .kbd{display:none}
+  .actions .btn.primary{flex-basis:100%}   /* primary gets its own full-width row */
+  .btn.ghost{flex-basis:100%;min-height:40px}
+  .src{padding:12px 14px}
+  .sub{padding:10px 14px}
+  .row{min-height:60px;align-items:flex-start;padding-top:13px}
+  .row .tier{margin-top:5px}
+  .row .t{white-space:normal}          /* wrap instead of truncating on narrow screens */
+  .row .right{flex-direction:column;align-items:flex-end;gap:2px}
+  .row .dur{display:none}
+  .row .grab{display:none}
+  .legend{display:none}
+  .stats{grid-template-columns:repeat(2,1fr);gap:14px 18px}
+  .foot{flex-wrap:wrap}
+  .foot .note{margin-left:0;text-align:left;flex-basis:100%;order:-1;margin-bottom:4px}
+  .card-h h2{font-size:13.5px}
+
+  .tabbar{
+    display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;
+    background:var(--surface);border-top:1px solid var(--line);padding:6px 4px 10px;z-index:20
+  }
+  .tabbar a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0;min-height:48px;
+    text-decoration:none;color:var(--faint);font-size:10.5px;font-weight:600}
+  .tabbar a .ic{font-size:16px;line-height:1}
+  .tabbar a[aria-current="page"]{color:var(--ink)}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+
+<div class="app">
+
+  <!-- ══ sidebar (desktop) ══ -->
+  <aside class="sidebar">
+    <div class="brand"><span class="mark">C</span><span class="name">CourseCrusher</span></div>
+
+    <nav class="nav" aria-label="Primary">
+      <a href="#" data-screen="today" aria-current="page"><span class="ic">◈</span>Today</a>
+      <a href="#" data-screen="plan"><span class="ic">▤</span>Plan<span class="count">12</span></a>
+      <a href="#" data-screen="breakdown"><span class="ic">✳</span>Breakdown</a>
+      <a href="#" data-screen="courses"><span class="ic">◇</span>Courses<span class="count">5</span></a>
+      <div class="grp">Workspace</div>
+      <a href="#" data-screen="connections"><span class="ic">⇄</span>Connections</a>
+      <a href="#" data-screen="settings"><span class="ic">⚙</span>Settings</a>
+    </nav>
+
+    <div class="side-foot">
+      <div class="kbd-hint"><span class="kbd">⌘K</span> Command palette</div>
+      <div class="who">
+        <span class="av">VA</span>
+        <span class="meta-w"><span class="nm">Varshini A.</span><span class="sub">Fall 2026 · 16 cr</span></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ main ══ -->
+  <div class="main">
+
+    <header class="topbar">
+      <h1 id="screen-title">Today</h1>
+      <span class="date">Mon, Sep 28</span>
+      <span class="sp"></span>
+      <span class="pill"><span class="dot"></span>Free until <b>2:00 PM</b></span>
+      <span class="pill sel"><span class="cap">Energy</span>&nbsp;High</span>
+      <span class="search">Search tasks<span class="kbd">⌘K</span></span>
+      <span class="av-top">VA</span>
+    </header>
+
+    <!-- mobile-only context controls -->
+    <div class="mobile-ctx">
+      <span class="pill"><span class="dot"></span>Free <b>1h 25m</b></span>
+      <span class="pill sel"><span class="cap">Energy</span>&nbsp;High</span>
+      <span class="pill sel"><span class="cap">Course</span>&nbsp;All</span>
+    </div>
+
+    <main class="content" id="main">
+
+      <!-- ── TODAY ── -->
+      <section class="panel" id="p-today">
+        <div class="cols">
+
+          <div>
+            <!-- agent recommendation -->
+            <section class="card hero" aria-labelledby="upnext">
+              <div class="eyebrow">
+                <span id="upnext">Up next</span>
+                <span class="agent"><span class="sparkle">✦</span>Agent pick</span>
+              </div>
+              <h3>Implement gradient descent loop — Project 2</h3>
+              <div class="course">EECS 445 · Machine Learning &nbsp;·&nbsp; due Wed 11:59 PM</div>
+
+              <div class="meta">
+                <span class="chip deep"><span class="cdot"></span>Deep Work</span>
+                <span class="chip plain">50 min</span>
+                <span class="chip plain">Fits 12:35 – 1:25 PM</span>
+                <span class="chip warn">2 days left</span>
+              </div>
+
+              <p class="why">
+                <b>Why now:</b> you have a 90-minute gap before PHYS 240 Lab and you marked your energy
+                <b>High</b>. This is the last Deep Work slot before the deadline — the remaining subtasks
+                are Shallow and fit tonight.
+              </p>
+
+              <div class="actions">
+                <button class="btn primary">Start 50-min focus<span class="kbd">⏎</span></button>
+                <button class="btn">Reschedule</button>
+                <button class="btn">Swap task</button>
+                <button class="btn ghost">Not today</button>
+              </div>
+            </section>
+
+            <!-- queue -->
+            <section class="card" aria-labelledby="queue">
+              <div class="card-h">
+                <h2 id="queue">Then, if the day holds</h2>
+                <span class="sp"></span>
+                <span class="legend">
+                  <span><i style="background:var(--deep)"></i>Deep</span>
+                  <span><i style="background:var(--shallow)"></i>Shallow</span>
+                  <span><i style="background:var(--low)"></i>Low energy</span>
+                </span>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="tier low"></span>
+                  <span class="txt"><div class="t">Read Ch. 7 — Neural networks</div><div class="s">EECS 445 · reading</div></span>
+                  <span class="right"><span class="dur">25 min</span><span class="slot">4:10 PM</span><span class="grab">⠿</span></span>
+                </div>
+                <div class="row">
+                  <span class="tier shallow"></span>
+                  <span class="txt"><div class="t">Email Prof. Ramirez about lab extension</div><div class="s">EECS 376 · admin</div></span>
+                  <span class="right"><span class="dur">8 min</span><span class="slot">4:40 PM</span><span class="grab">⠿</span></span>
+                </div>
+                <div class="row">
+                  <span class="tier deep"></span>
+                  <span class="txt"><div class="t">Outline lab report — introduction + method</div><div class="s">PHYS 240 · writing</div></span>
+                  <span class="right"><span class="dur">45 min</span><span class="slot">7:00 PM</span><span class="grab">⠿</span></span>
+                </div>
+                <div class="row">
+                  <span class="tier shallow"></span>
+                  <span class="txt"><div class="t">Submit discussion post #4</div><div class="s">COMM 261 · admin</div></span>
+                  <span class="right"><span class="dur">12 min</span><span class="slot">8:05 PM</span><span class="grab">⠿</span></span>
+                </div>
+              </div>
+            </section>
+
+            <!-- weekly load -->
+            <section class="card" aria-labelledby="week">
+              <div class="card-h"><h2 id="week">This week</h2><span class="sp"></span><span class="aside">Sep 28 – Oct 4</span></div>
+              <div class="stats">
+                <div><div class="n">9h 20m</div><div class="l">Deep Work booked</div><div class="bar"><i class="deep" style="width:56%"></i></div></div>
+                <div><div class="n">4h 05m</div><div class="l">Shallow Work</div><div class="bar"><i class="shallow" style="width:25%"></i></div></div>
+                <div><div class="n">3h 10m</div><div class="l">Low Energy</div><div class="bar"><i class="low" style="width:19%"></i></div></div>
+                <div><div class="n">2</div><div class="l">Deadlines at risk</div><div class="bar"><i class="risk" style="width:14%"></i></div></div>
+              </div>
+            </section>
+          </div>
+
+          <!-- right rail -->
+          <div>
+            <section class="card" aria-labelledby="plan">
+              <div class="card-h"><h2 id="plan">Today's plan</h2><span class="sp"></span><span class="aside">auto-fitted</span></div>
+              <div class="tl">
+                <div class="tl-row"><span class="hr">11 AM</span><span class="lane">
+                  <div class="blk fixed"><div class="bt">EECS 445 Lecture</div><div class="bs">11:00 – 12:20 · Chrysler 220</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">12 PM</span><span class="lane">
+                  <div class="blk deep"><div class="bt">Deep Work · Project 2</div><div class="bs">12:35 – 1:25 · agent-scheduled</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">2 PM</span><span class="lane">
+                  <div class="blk fixed"><div class="bt">PHYS 240 Lab</div><div class="bs">2:00 – 4:00 · Randall</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">4 PM</span><span class="lane">
+                  <div class="blk low"><div class="bt">Low Energy · Read Ch. 7</div><div class="bs">4:10 – 4:35</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">5 PM</span><span class="lane">
+                  <div class="blk free">Protected — dinner &amp; gym</div>
+                </span></div>
+                <div class="tl-row"><span class="hr">7 PM</span><span class="lane">
+                  <div class="blk deep"><div class="bt">Deep Work · Lab report</div><div class="bs">7:00 – 7:45</div></div>
+                </span></div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="conns">
+              <div class="card-h"><h2 id="conns">Connections</h2></div>
+              <div class="conn">
+                <div class="c"><span class="ic">Cv</span><span class="nm">Canvas</span><span class="st"><i></i>Synced 4m ago</span></div>
+                <div class="c"><span class="ic">GC</span><span class="nm">Google Calendar</span><span class="st"><i></i>Synced 4m ago</span></div>
+                <div class="c"><span class="ic">$_</span><span class="nm">CLI token</span><span class="st err"><i></i>Expires in 3d</span></div>
+              </div>
+              <div class="term">
+                <div><span class="p">$</span> crush next --free 90m</div>
+                <div class="o">→ <span class="hl">Deep Work</span> · gradient descent (50m)</div>
+                <div class="o">&nbsp;&nbsp;EECS 445 · 12:35–1:25 · due in 2d</div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── BREAKDOWN ── -->
+      <section class="panel" id="p-breakdown" hidden>
+        <div class="cols">
+          <div>
+            <section class="card" aria-labelledby="bd">
+              <div class="src">
+                <div class="lbl">Source · Canvas · EECS 445</div>
+                <p class="q">“Project 2: implement logistic regression from scratch. Submit a working
+                  <code>train.py</code> plus a short report with your loss curve and a
+                  learning-rate ablation. Due Wed 11:59 PM.”</p>
+              </div>
+
+              <div class="card-h" style="padding-top:12px">
+                <h2 id="bd">Agent breakdown — 5 subtasks, 3h 20m total</h2>
+              </div>
+
+              <div class="sub">
+                <span class="box on">✓</span>
+                <span class="body">
+                  <div class="t">Set up <code>train.py</code> skeleton + data loader</div>
+                  <div class="m"><span class="chip deep"><span class="cdot"></span>Deep Work</span>
+                    <span class="chip plain">35 min</span><span class="when">Today 12:35 PM</span></div>
+                </span>
+              </div>
+              <div class="sub">
+                <span class="box on">✓</span>
+                <span class="body">
+                  <div class="t">Implement gradient descent loop</div>
+                  <div class="m"><span class="chip deep"><span class="cdot"></span>Deep Work</span>
+                    <span class="chip plain">50 min</span><span class="when">Today 1:10 PM</span></div>
+                </span>
+              </div>
+              <div class="sub">
+                <span class="box on">✓</span>
+                <span class="body">
+                  <div class="t">Run learning-rate ablation, save loss curves</div>
+                  <div class="m"><span class="chip shallow"><span class="cdot"></span>Shallow Work</span>
+                    <span class="chip plain">25 min</span><span class="when">Tue 9:20 AM</span></div>
+                </span>
+              </div>
+              <div class="sub">
+                <span class="box on">✓</span>
+                <span class="body">
+                  <div class="t">Draft report — method &amp; results</div>
+                  <div class="m"><span class="chip deep"><span class="cdot"></span>Deep Work</span>
+                    <span class="chip plain">60 min</span><span class="when">Tue 7:00 PM</span></div>
+                </span>
+              </div>
+              <div class="sub">
+                <span class="box"></span>
+                <span class="body">
+                  <div class="t">Proofread and submit to Canvas</div>
+                  <div class="m"><span class="chip low"><span class="cdot"></span>Low Energy</span>
+                    <span class="chip plain">30 min</span><span class="when">Wed 8:00 PM</span></div>
+                </span>
+              </div>
+
+              <div class="foot">
+                <button class="btn primary">Add 4 to plan</button>
+                <button class="btn">Edit subtasks</button>
+                <span class="note">Nothing is scheduled until you confirm.<br>Every slot stays editable.</span>
+              </div>
+            </section>
+          </div>
+
+          <div>
+            <section class="card" aria-labelledby="fit">
+              <div class="card-h"><h2 id="fit">Where it fits</h2><span class="sp"></span><span class="aside">Mon – Wed</span></div>
+              <div class="tl">
+                <div class="tl-row"><span class="hr">Mon</span><span class="lane">
+                  <div class="blk deep"><div class="bt">2 Deep Work blocks</div><div class="bs">12:35 PM, 1:10 PM · 1h 25m</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">Tue</span><span class="lane">
+                  <div class="blk shallow"><div class="bt">Ablation run</div><div class="bs">9:20 AM · 25m</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">&nbsp;</span><span class="lane">
+                  <div class="blk deep"><div class="bt">Report draft</div><div class="bs">7:00 PM · 1h</div></div>
+                </span></div>
+                <div class="tl-row"><span class="hr">Wed</span><span class="lane">
+                  <div class="blk low"><div class="bt">Proofread &amp; submit</div><div class="bs">8:00 PM · 30m — 3h 59m of buffer</div></div>
+                </span></div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="chk">
+              <div class="card-h"><h2 id="chk">Agent checks</h2></div>
+              <div class="conn">
+                <div class="c"><span class="ic">✓</span><span class="nm">No clash with 6 fixed events</span></div>
+                <div class="c"><span class="ic">✓</span><span class="nm">Deep Work kept off late nights</span></div>
+                <div class="c"><span class="ic">!</span><span class="nm">EECS 376 quiz also due Wed</span><span class="st err"><i></i>Review</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── stubs ── -->
+      <section class="panel" id="p-plan" hidden>
+        <div class="card"><div class="stub"><div class="t">Week plan</div><div class="s">Seven-day board — same task rows, grouped by day. Out of scope for the v1 wireframe.</div></div></div>
+      </section>
+      <section class="panel" id="p-courses" hidden>
+        <div class="card"><div class="stub"><div class="t">Courses</div><div class="s">Per-course task backlog and workload forecast. Out of scope for the v1 wireframe.</div></div></div>
+      </section>
+      <section class="panel" id="p-connections" hidden>
+        <div class="card"><div class="stub"><div class="t">Connections</div><div class="s">Canvas &amp; Google Calendar OAuth, scopes, and sync history. Out of scope for the v1 wireframe.</div></div></div>
+      </section>
+      <section class="panel" id="p-settings" hidden>
+        <div class="card"><div class="stub"><div class="t">Settings</div><div class="s">Protected hours, energy defaults, notification rules. Out of scope for the v1 wireframe.</div></div></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ══ tab bar (mobile) ══ -->
+  <nav class="tabbar" aria-label="Primary">
+    <a href="#" data-screen="today" aria-current="page"><span class="ic">◈</span>Today</a>
+    <a href="#" data-screen="plan"><span class="ic">▤</span>Plan</a>
+    <a href="#" data-screen="breakdown"><span class="ic">✳</span>Breakdown</a>
+    <a href="#" data-screen="courses"><span class="ic">◇</span>Courses</a>
+  </nav>
+</div>
+
+<script>
+  const TITLES = {
+    today:"Today", plan:"Plan", breakdown:"Breakdown",
+    courses:"Courses", connections:"Connections", settings:"Settings"
+  };
+
+  function show(screen){
+    if(!TITLES[screen]) screen = "today";
+    document.querySelectorAll(".panel").forEach(p => {
+      p.hidden = (p.id !== "p-" + screen);
+    });
+    document.querySelectorAll("[data-screen]").forEach(a => {
+      if(a.dataset.screen === screen) a.setAttribute("aria-current","page");
+      else a.removeAttribute("aria-current");
+    });
+    document.getElementById("screen-title").textContent = TITLES[screen];
+  }
+
+  document.querySelectorAll("[data-screen]").forEach(a => {
+    a.addEventListener("click", e => { e.preventDefault(); show(a.dataset.screen); });
+  });
+
+  show(new URLSearchParams(location.search).get("screen") || "today");
+</script>
+</body>
+</html>

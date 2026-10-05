@@ -7,6 +7,9 @@ kind = "cli"
 jac-version = "==0.37.23"
 
 [dependencies]
+google-auth = "~=2.60"
+google-auth-oauthlib = "~=1.5"
+requests = "~=2.34"
 
 [dev-dependencies]
 watchdog = ">=3.0.0"

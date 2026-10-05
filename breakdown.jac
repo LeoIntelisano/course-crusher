@@ -1,6 +1,7 @@
 """Turn one assignment description into actionable subtasks."""
 
 import sys;
+import from jaclang.byllm.lib { ByLLMError }
 
 enum CognitiveTier: str {
     DEEP_WORK = "Deep Work",
@@ -43,26 +44,36 @@ def extract_subtasks(assignment_text: str) -> list[Subtask] by llm(
 sem extract_subtasks = "Extract actionable subtasks from one assignment description.";
 sem extract_subtasks.assignment_text = "The complete raw assignment description.";
 
+"""Validate one model-produced subtask and return a clean copy at `position`."""
+def normalize_subtask(subtask: Subtask, position: int) -> Subtask {
+    title = subtask.title.strip();
+    if not title {
+        raise ValueError("A subtask title cannot be empty.");
+    }
+    if subtask.tier not in list(CognitiveTier) {
+        raise ValueError(f"Invalid tier: {subtask.tier}");
+    }
+    if subtask.estimated_duration <= 0 {
+        raise ValueError("A subtask duration must be positive.");
+    }
+    return Subtask(
+        subtask_id=f"subtask-{position}",
+        title=title,
+        tier=CognitiveTier(subtask.tier),
+        estimated_duration=subtask.estimated_duration,
+        order=position
+    );
+}
+
+"""Validate the model's subtasks and renumber IDs and order from 1, in returned order."""
 def normalize_subtasks(subtasks: list[Subtask]) -> list[Subtask] {
     if not subtasks {
         raise ValueError("The assignment produced no subtasks.");
     }
-    for index in range(len(subtasks)) {
-        subtask = subtasks[index];
-        subtask.title = subtask.title.strip();
-        if not subtask.title {
-            raise ValueError("A subtask title cannot be empty.");
-        }
-        if subtask.tier not in ["Deep Work", "Shallow Work", "Low Energy"] {
-            raise ValueError(f"Invalid tier: {subtask.tier}");
-        }
-        if subtask.estimated_duration <= 0 {
-            raise ValueError("A subtask duration must be positive.");
-        }
-        subtask.subtask_id = f"subtask-{index + 1}";
-        subtask.order = index + 1;
-    }
-    return subtasks;
+    return [
+        normalize_subtask(subtask, position)
+        for (position, subtask) in enumerate(subtasks, start=1)
+    ];
 }
 
 walker BreakdownAssignment {
@@ -77,7 +88,20 @@ walker BreakdownAssignment {
     }
 }
 
+"""Break down the description in `argv`; `jac run` prints the walker's report."""
+def main(argv: list[str]) -> int {
+    try {
+        root spawn BreakdownAssignment(assignment_text=" ".join(argv));
+    } except ValueError as err {
+        print(f"breakdown: {err}", file=sys.stderr);
+        return 1;
+    } except ByLLMError as err {
+        print(f"breakdown: The model call failed: {err}", file=sys.stderr);
+        return 1;
+    }
+    return 0;
+}
+
 with entry:__main__ {
-    assignment_text = " ".join(sys.argv[1:]);
-    root spawn BreakdownAssignment(assignment_text=assignment_text);
+    sys.`exit(main(sys.argv[1:]));
 }

@@ -8,5 +8,8 @@ jac-version = "==0.37.23"
 
 [dependencies]
 
+[byllm.model]
+default_model = "gpt-4o-mini"
+
 [dev-dependencies]
 watchdog = ">=3.0.0"

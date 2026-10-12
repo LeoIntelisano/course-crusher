@@ -21,6 +21,27 @@ grid stacks, and task rows wrap instead of truncating.
 Nav is live: click sidebar or tab-bar items to switch. `?screen=breakdown` deep-links
 a screen, which is how the slide exports were captured.
 
+## Breakdown input (preview)
+
+The Breakdown screen has an input card (#8): paste an assignment description and
+**Break down assignment** (or ⌘/Ctrl+Enter) renders a subtask list. The AI walker
+isn't served over HTTP yet, so every description gets the same sample subtasks.
+
+`breakdown-preview.js` holds the data side, and it uses the walker's `Subtask` contract
+from `breakdown.jac` (#3): `subtask_id`, `title`, `tier`, `estimated_duration`,
+`order`. Connecting the real walker means replacing `mockBreakdown(description)`
+with a call that resolves to the walker's report. Responses go through
+`assertSubtasks` before rendering, and rows are built with `textContent`, so
+model output is never parsed as HTML.
+
+```bash
+node --test wireframes/breakdown-preview.test.js
+```
+
+The page loads `breakdown-preview.js` with a relative `<script src>`. Opening
+`index.html` from disk still works, but the browser pane in Claude Code needs it
+served: `python3 -m http.server --directory wireframes`.
+
 ## The three effort tiers
 
 Tier drives everything the agent decides, so it is visible on every surface:

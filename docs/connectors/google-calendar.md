@@ -72,6 +72,26 @@ boundary is faked. `fetch_busy_blocks` takes any object with a `requests`-style
 through the same parser the live path uses. Mock credentials would still need a
 fake token endpoint and would test Google's library rather than our code.
 
+**The web app reads event names, not just busy time.** It asks for
+`calendar.readonly` and lists events with `events.list`
+(`connectors/google_events.jac`), so the Today calendar and the plan can show
+what each block is and label it with the matching course. The CLI above keeps
+the narrower free/busy scope.
+
+- `singleEvents=true` expands recurring events. Cancelled events and invitations
+  you declined are dropped. "Show as free" events and all-day events are shown
+  but never planned around.
+- An event belongs to a course when its name contains the course code (with or
+  without the space), the course name, or one of the course's **calendar names**
+  (tags set on the Courses screen, e.g. "ML"). Matching ignores case and
+  punctuation, works on whole words, and the longest match wins
+  (`courses/matching.jac`).
+- Nothing is copied into the database. Reads are cached in memory for 60 seconds,
+  aligned to whole weeks so Today and the calendar share one request.
+- Links granted before this change only have the free/busy scope. They keep
+  working with anonymous "Busy" blocks, and Connections and Today offer a
+  one-click reconnect to show names.
+
 **The web app: OAuth web-server flow with PKCE, token stored per student.**
 `connectors/google_web_auth.jac` builds the consent URL and exchanges the code;
 `connections/google_link.jac` holds each student's `GoogleLink` node and the

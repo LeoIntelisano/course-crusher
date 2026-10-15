@@ -1,6 +1,7 @@
 """Today: the agent's pick, the rest of the day, this week's load, and the fitted timeline."""
 
 import from "@jac/runtime" { Link }
+import from .CalendarCard { CalendarCard }
 import from .service { ActionResult, reschedule_task, skip_task_today }
 import from .TodayCards {
     ConnectionsCard,
@@ -40,6 +41,7 @@ def:pub TodayPage -> JsxElement {
     chosen: PlanItem | None = candidates[swap_index % len(candidates)] if candidates else None;
     chosen_id: str = chosen.task_id if chosen is not None else "";
 
+    <div className="flex flex-col gap-[13px]">
     <div className={COLUMNS}>
         <div className={CARD_STACK}>
             <Notice tone="error" message={failure} />
@@ -87,5 +89,7 @@ def:pub TodayPage -> JsxElement {
             <TimelineCard blocks={today.timeline} />
             <ConnectionsCard calendar={today.calendar} />
         </div>
+    </div>
+    <CalendarCard />
     </div>
 }

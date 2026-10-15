@@ -66,11 +66,58 @@ def:pub MeetingLine(meeting: MeetingView, busy: bool, onRemove: Callable[[str], 
     </li>
 }
 
+"""The names a course goes by in calendar events, beyond its code and name."""
+def:pub CourseTags(course: CourseView, busy: bool, onSetTags: Callable[[str, list[str]], None]) -> JsxElement {
+    has draft: str = "";
+
+    def addTag(e: FormEvent) {
+        e.preventDefault();
+        tag = " ".join(draft.split());
+        if tag {
+            onSetTags(course.id, course.tags + [tag]);
+            draft = "";
+        }
+    }
+
+    known = [course.code] + ([course.name] if course.name else []) + course.tags;
+    <div className="mt-4">
+        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">Calendar names</div>
+        <p className="mt-1 mb-2 text-[11.5px] text-muted">{"Google events whose names include " + ", ".join(known) + " are labelled " + course.code + "."}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+            {for tag in course.tags {
+                <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-line bg-canvas py-0.5 pr-1 pl-2.5 text-[11.5px] font-semibold text-body">
+                    {tag}
+                    <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={f"Remove {tag}"}
+                        className="grid h-5 w-5 place-items-center rounded-full text-muted hover:bg-line"
+                        onClick={lambda { onSetTags(course.id, [t for t in course.tags if t != tag]); }}
+                    >
+                        ×
+                    </button>
+                </span>
+            }}
+            <form className="flex items-center gap-1.5" onSubmit={addTag} aria-label={f"Add a calendar name for {course.code}"}>
+                <input
+                    className="w-[150px] rounded-sm border border-line-strong bg-surface px-2 py-1 text-[16px] desk:text-[12px]"
+                    placeholder="e.g. ML, Wiens"
+                    aria-label={f"Calendar name for {course.code}"}
+                    value={draft}
+                    onChange={lambda (e: ChangeEvent) { draft = e.target.value; }}
+                />
+                <button type="submit" className={BUTTON_SMALL} disabled={busy}>Add name</button>
+            </form>
+        </div>
+    </div>
+}
+
 def:pub CourseCard(
     course: CourseView,
     busy: bool,
     adding: bool,
     onAddTime: Callable[[str], None],
+    onSetTags: Callable[[str, list[str]], None],
     onRemoveCourse: Callable[[str], None],
     onRemoveMeeting: Callable[[str], None],
     onRemoveAssignment: Callable[[str], None],
@@ -92,6 +139,7 @@ def:pub CourseCard(
                 }}
             </ul>
             {children if adding else <button type="button" className={BUTTON_SMALL + " mt-2"} onClick={lambda (e: MouseEvent) { onAddTime(course.id); }}>Add class time</button>}
+            <CourseTags course={course} busy={busy} onSetTags={onSetTags} />
             <div className="mt-4 text-[11px] font-[650] uppercase tracking-[.08em] text-faint">Assignments</div>
             <div className="divide-y divide-line">
                 {if len(course.assignments) == 0 {

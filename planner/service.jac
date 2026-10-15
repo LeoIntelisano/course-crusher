@@ -4,15 +4,23 @@ Each call re-plans from the stored tasks and the calendar, so the views always
 reflect the latest edits. Nothing is scheduled ahead of time.
 """
 
-import from datetime { datetime, timedelta, timezone }
+import from datetime { datetime, time, timedelta, timezone }
 import from account.schema { ensure_profile, rules_for }
 import from breakdown { CognitiveTier }
 import from courses.schema { find_task }
 import from courses.store { SubtaskDraft, clean_drafts }
+import from planner.week_calendar { CalendarView, calendar_view, clamp_offset, week_start }
 import from planner.fit { FitPreview, PREVIEW_GROUP, fit_view, preview_id }
 import from planner.inputs { load_inputs }
 import from planner.views { TodayView, WeekView, today_view, week_view }
-import from scheduling.planner { PlanTask, at_local, local_day, placement_for, plan_tasks }
+import from scheduling.planner {
+    MAX_HORIZON_DAYS,
+    PlanTask,
+    at_local,
+    local_day,
+    placement_for,
+    plan_tasks
+}
 import from shared.timefmt { parse_due, parse_zone }
 
 glob RESCHEDULE_FALLBACK_HOURS: int = 1;
@@ -40,6 +48,20 @@ def:protect get_today -> TodayView {
 def:protect get_week -> WeekView {
     now = utc_now();
     return week_view(load_inputs(now), now);
+}
+
+"""One week of the calendar: 0 is this week, -1 last week, 1 next week."""
+def:protect get_calendar(week_offset: int) -> CalendarView {
+    now = utc_now();
+    rules = rules_for(ensure_profile());
+    offset = clamp_offset(week_offset);
+    first = week_start(now, rules, offset);
+    show_from = at_local(first, time(0), rules.zone);
+    show_until = at_local(first + timedelta(days=7), time(0), rules.zone);
+    days_to_week_end = (first + timedelta(days=7) - local_day(now, rules.zone)).days;
+    horizon = max(1, min(MAX_HORIZON_DAYS, max(rules.horizon_days, days_to_week_end)));
+    inputs = load_inputs(now, show_from, show_until, horizon);
+    return calendar_view(inputs, now, offset);
 }
 
 def proposed_tasks(drafts: list[SubtaskDraft], due: datetime | None) -> list[PlanTask] {

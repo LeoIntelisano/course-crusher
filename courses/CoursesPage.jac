@@ -10,6 +10,7 @@ import from .store {
     remove_assignment,
     remove_course,
     remove_meeting,
+    set_course_tags,
     set_task_done
 }
 import from ..shell.PlannerContext { usePlanner }
@@ -45,6 +46,7 @@ def:pub CoursesPage -> JsxElement {
     async def deleteMeeting(meeting_id: str) -> None;
     async def deleteAssignment(assignment_id: str) -> None;
     async def toggleTask(task_id: str, done: bool) -> None;
+    async def saveTags(course_id: str, tags: list[str]) -> None;
 
     def toggleDay(day: int) {
         meeting_days = [d for d in meeting_days if d != day] if day in meeting_days else meeting_days + [day];
@@ -134,6 +136,7 @@ def:pub CoursesPage -> JsxElement {
                 busy={busy}
                 adding={meeting_course == course.id}
                 onAddTime={lambda (course_id: str) { meeting_course = course_id; meeting_days = []; }}
+                onSetTags={saveTags}
                 onRemoveCourse={deleteCourse}
                 onRemoveMeeting={deleteMeeting}
                 onRemoveAssignment={deleteAssignment}

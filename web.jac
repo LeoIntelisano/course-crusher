@@ -38,11 +38,13 @@ import from courses.store {
     remove_assignment,
     remove_course,
     remove_meeting,
+    set_course_tags,
     set_task_done
 }
 import from planner.service {
     ActionResult,
     FitResult,
+    get_calendar,
     get_today,
     get_week,
     preview_fit,

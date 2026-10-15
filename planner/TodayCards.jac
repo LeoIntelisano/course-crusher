@@ -179,7 +179,7 @@ def:pub TimelineCard(blocks: list[TimelineBlock]) -> JsxElement {
 
 def calendar_label(status: CalendarStatus) -> str {
     if status.state == "connected" {
-        return "Connected";
+        return "Connected" if status.names else "Busy times only";
     }
     if status.state == "error" {
         return "Needs attention";

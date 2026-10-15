@@ -12,6 +12,7 @@ import from breakdown { break_down_assignment }
 import from connections.google_link { calendar_status }
 import from courses.drafts { DraftRow }
 import from courses.store { list_courses }
+import from planner.grid { item_box }
 import from planner.service { get_today }
 import from shared.errors { error_message }
 import from shared.format { format_minutes }

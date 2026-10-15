@@ -101,6 +101,11 @@ for day in Mon Tue Wed Thu Fri Sat Sun; do click_button "$day"; done
 click_button 'Save class time'
 expect_text "Mon Tue Wed Thu Fri Sat Sun 6:00 – 7:00 AM · Chrysler 220"
 
+step "Name the course the way calendar events do"
+browse fill 'input[aria-label="Calendar name for EECS 445"]' 'ML' >/dev/null
+click_button 'Add name'
+expect_text "Google events whose names include EECS 445, Machine Learning, ML are labelled EECS 445."
+
 step "Break down an assignment"
 browse navigate "$BASE_URL/breakdown" >/dev/null
 expect_text "Break down a new assignment"
@@ -127,6 +132,20 @@ expect_text "Focus block running"
 click_button 'Mark done'
 expect_no_text "Set up train.py skeleton and data loader"
 expect_text "Implement the gradient descent loop"
+
+step "The calendar on Today shows the week"
+expect_text "Calendar"
+expect_text "This week"
+[ "$(browse eval "document.querySelectorAll('[data-kind=class]').length")" -ge 1 ] && pass "class times drawn on the calendar" || fail "no class times on the calendar"
+[ "$(browse eval "document.querySelectorAll('[data-kind=task]').length")" -ge 1 ] && pass "planned blocks drawn on the calendar" || fail "no planned blocks on the calendar"
+today_columns() { browse eval "document.querySelectorAll('[data-today=true]').length"; }
+[ "$(today_columns)" = "1" ] && pass "today is highlighted" || fail "today isn't highlighted"
+click_button '›'
+sleep 2
+[ "$(today_columns)" = "0" ] && pass "next week has no today column" || fail "next week still shows today"
+click_button 'This week'
+sleep 2
+[ "$(today_columns)" = "1" ] && pass "back to this week" || fail "didn't return to this week"
 
 step "The week plan lists the remaining steps and the class"
 browse navigate "$BASE_URL/plan" >/dev/null

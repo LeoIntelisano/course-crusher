@@ -238,3 +238,22 @@ test "students cannot see or change each other's courses" {
         client.close();
     }
 }
+
+test "course tags are cleaned, de-duplicated and capped" {
+    client = signed_in_client();
+    try {
+        course = create_course(client, "EECS 445", "Machine Learning");
+        saved = call(client, "set_course_tags", {"course_id": course["id"], "tags": ["  ML ", "ML", "", "Wiens lecture"]});
+        too_many = call(client, "set_course_tags", {"course_id": course["id"], "tags": [f"t{n}" for n in range(11)]});
+        too_long = call(client, "set_course_tags", {"course_id": course["id"], "tags": ["x" * 41]});
+        missing = call(client, "set_course_tags", {"course_id": "gone", "tags": ["ML"]});
+
+        assert saved["ok"] and saved["courses"][0]["tags"] == ["ML", "Wiens lecture"];
+        assert not too_many["ok"] and "up to 10" in too_many["error"];
+        assert not too_long["ok"] and "under 40 characters" in too_long["error"];
+        assert not missing["ok"];
+        assert call(client, "list_courses")[0]["tags"] == ["ML", "Wiens lecture"];
+    } finally {
+        client.close();
+    }
+}

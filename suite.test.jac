@@ -27,6 +27,8 @@ glob PROTECTED_CALLS: dict[str, dict[str, any]] = {
     "set_task_done": {"task_id": "x", "done": True},
     "get_today": {},
     "get_week": {},
+    "get_calendar": {"week_offset": 0},
+    "set_course_tags": {"course_id": "x", "tags": ["ML"]},
     "preview_fit": {"title": "T", "due_at": "", "subtasks": []},
     "reschedule_task": {"task_id": "x"},
     "skip_task_today": {"task_id": "x"}

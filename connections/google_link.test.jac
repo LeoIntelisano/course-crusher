@@ -283,6 +283,11 @@ test "a broken OAuth client file is reported without leaking its contents" {
     assert "client_secret" not in json.dumps(today);
 }
 
+"""The calendar week that holds tomorrow (next week when today is Sunday)."""
+def tomorrows_week -> int {
+    return 1 if datetime.now(timezone.utc).weekday() == 6 else 0;
+}
+
 """Tomorrow's events as events.list returns them."""
 def events_tomorrow -> dict[str, any] {
     start = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=15, minute=0, second=0, microsecond=0);
@@ -307,7 +312,7 @@ test "event names come through and match courses by code and tag" {
                 connect(client, EVENT_SCOPES);
                 with patch.object(AuthorizedSession, "get", return_value=FakeResponse(payload=events_tomorrow())) as get {
                     week = call(client, "get_week");
-                    calendar = call(client, "get_calendar", {"week_offset": 0});
+                    calendar = call(client, "get_calendar", {"week_offset": tomorrows_week()});
                     again = call(client, "get_week");
                 }
                 status = call(client, "calendar_status");
@@ -360,4 +365,31 @@ test "read windows widen to whole weeks" {
     assert start == datetime(2026, 10, 5, 0, 0, tzinfo=zone);
     assert end == datetime(2026, 10, 19, 0, 0, tzinfo=zone);
     assert aligned_window(start, end) == (start, end);
+}
+
+test "linking an event by hand changes its course everywhere" {
+    with TemporaryDirectory() as tmp {
+        with patch.dict("os.environ", client_env(tmp)) {
+            client = signed_in_client();
+            try {
+                call(client, "setup_account", {"display_name": "S", "timezone": "UTC"});
+                eecs = call(client, "add_course", {"code": "EECS 445", "name": ""})["courses"][0];
+                phys = [c for c in call(client, "add_course", {"code": "PHYS 240", "name": ""})["courses"] if c["code"] == "PHYS 240"][0];
+                connect(client, EVENT_SCOPES);
+                call(client, "link_event", {"event_title": "Coffee?", "course_id": phys["id"]});
+                call(client, "link_event", {"event_title": "EECS 445 Lecture", "course_id": ""});
+                with patch.object(AuthorizedSession, "get", return_value=FakeResponse(payload=events_tomorrow())) {
+                    calendar = call(client, "get_calendar", {"week_offset": tomorrows_week()});
+                }
+            } finally {
+                client.close();
+            }
+        }
+    }
+    items = {i["title"]: i for d in calendar["days"] for i in d["items"] if i["kind"] in ["event", "free"]};
+    assert (items["Coffee?"]["course_code"], items["Coffee?"]["color"], items["Coffee?"]["linked"]) == ("PHYS 240", phys["color"], True);
+    assert (items["EECS 445 Lecture"]["course_code"], items["EECS 445 Lecture"]["linked"]) == ("", True);
+    assert not items["ML office hours"]["linked"];
+    assert [c["code"] for c in calendar["courses"]] == ["EECS 445", "PHYS 240"];
+    assert eecs["color"] != phys["color"];
 }

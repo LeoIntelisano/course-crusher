@@ -257,3 +257,60 @@ test "course tags are cleaned, de-duplicated and capped" {
         client.close();
     }
 }
+
+test "new courses get the next palette color and colors can be changed" {
+    client = signed_in_client();
+    try {
+        first = create_course(client, "EECS 445");
+        second = create_course(client, "PHYS 240");
+        changed = call(client, "set_course_color", {"course_id": first["id"], "color": "rose"});
+        bad = call(client, "set_course_color", {"course_id": first["id"], "color": "#ff0000"});
+
+        assert (first["color"], second["color"]) == ("indigo", "teal");
+        assert changed["ok"] and [c["color"] for c in changed["courses"] if c["code"] == "EECS 445"] == ["rose"];
+        assert not bad["ok"] and "Pick one of" in bad["error"];
+        third = create_course(client, "COMM 261");
+        assert third["color"] == "indigo";
+    } finally {
+        client.close();
+    }
+}
+
+test "events can be linked to a course, to none, and unlinked" {
+    client = signed_in_client();
+    try {
+        course = create_course(client, "EECS 445");
+        linked = call(client, "link_event", {"event_title": "  Wiens  office hours ", "course_id": course["id"]});
+        relinked = call(client, "link_event", {"event_title": "wiens office hours", "course_id": ""});
+        relinked_again = call(client, "link_event", {"event_title": "Wiens office hours", "course_id": course["id"]});
+        missing_course = call(client, "link_event", {"event_title": "Something", "course_id": "gone"});
+        blank = call(client, "link_event", {"event_title": "   ", "course_id": course["id"]});
+        unlinked = call(client, "unlink_event", {"event_title": "WIENS OFFICE HOURS"});
+        unlinked_twice = call(client, "unlink_event", {"event_title": "Wiens office hours"});
+
+        assert linked["ok"] and linked["courses"][0]["linked_events"] == ["Wiens office hours"];
+        assert relinked["ok"] and relinked["courses"][0]["linked_events"] == [];
+        assert relinked_again["courses"][0]["linked_events"] == ["Wiens office hours"];
+        assert not missing_course["ok"] and not blank["ok"];
+        assert unlinked["ok"] and unlinked["courses"][0]["linked_events"] == [];
+        assert not unlinked_twice["ok"];
+    } finally {
+        client.close();
+    }
+}
+
+test "removing a course drops the event links that pointed to it" {
+    client = signed_in_client();
+    try {
+        course = create_course(client, "EECS 445");
+        call(client, "link_event", {"event_title": "Study group", "course_id": course["id"]});
+
+        call(client, "remove_course", {"course_id": course["id"]});
+        again = create_course(client, "EECS 445");
+
+        assert again["linked_events"] == [];
+        assert not call(client, "unlink_event", {"event_title": "Study group"})["ok"];
+    } finally {
+        client.close();
+    }
+}

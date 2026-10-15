@@ -102,3 +102,14 @@ test "dates_between covers each local day the window touches" {
     assert dates_between(start, start + timedelta(days=7), rules) == days(7);
     assert dates_between(start, start + timedelta(hours=1), rules) == [MONDAY];
 }
+
+test "hand-made links override matching for Google events" {
+    matchers = [course_matcher("EECS 445", "Machine Learning", ["ML"])];
+    overrides = {"ml study group": "", "dentist": "EECS 445"};
+
+    (blocking, shown, all_day) = google_events(
+        [timed_entry("ML study group", 11, 12), timed_entry("Dentist", 13, 14)], matchers, True, overrides
+    );
+
+    assert [(e.title, e.course_code) for e in blocking] == [("ML study group", ""), ("Dentist", "EECS 445")];
+}

@@ -55,3 +55,11 @@ test "event kinds come from common words" {
     assert event_kind("Dinner with Sam") == "";
     assert event_kind("Labor Day") == "";
 }
+
+test "a hand-made link beats automatic matching" {
+    overrides = {normalize("ML office hours"): "PHYS 240", normalize("EECS 445 social"): ""};
+
+    assert match_course("ML Office Hours!", matchers(), overrides) == "PHYS 240";
+    assert match_course("EECS 445 social", matchers(), overrides) == "";
+    assert match_course("EECS 445 Lecture", matchers(), overrides) == "EECS 445";
+}

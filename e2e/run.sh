@@ -105,6 +105,9 @@ step "Name the course the way calendar events do"
 browse fill 'input[aria-label="Calendar name for EECS 445"]' 'ML' >/dev/null
 click_button 'Add name'
 expect_text "Google events whose names include EECS 445, Machine Learning, ML are labelled EECS 445."
+browse click 'button[role="radio"][aria-label="rose"]' >/dev/null
+sleep 2
+[ "$(browse eval "document.querySelector('button[role=radio][aria-label=rose]').getAttribute('aria-checked')")" = "true" ] && pass "course color set to rose" || fail "course color didn't change"
 
 step "Break down an assignment"
 browse navigate "$BASE_URL/breakdown" >/dev/null
@@ -137,6 +140,7 @@ step "The calendar on Today shows the week"
 expect_text "Calendar"
 expect_text "This week"
 [ "$(browse eval "document.querySelectorAll('[data-kind=class]').length")" -ge 1 ] && pass "class times drawn on the calendar" || fail "no class times on the calendar"
+[ "$(browse eval "document.querySelectorAll('[data-kind=class][data-color=rose]').length")" -ge 1 ] && pass "class times use the course color" || fail "class times aren't in the course color"
 [ "$(browse eval "document.querySelectorAll('[data-kind=task]').length")" -ge 1 ] && pass "planned blocks drawn on the calendar" || fail "no planned blocks on the calendar"
 today_columns() { browse eval "document.querySelectorAll('[data-today=true]').length"; }
 [ "$(today_columns)" = "1" ] && pass "today is highlighted" || fail "today isn't highlighted"

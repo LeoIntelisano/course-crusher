@@ -22,7 +22,8 @@ def week_inputs(
     all_day: list[AllDayEvent] | None = None,
     tasks: list[PlanTask] | None = None,
     protected: list[ProtectedHours] | None = None,
-    names: bool = True
+    names: bool = True,
+    links: dict[str, str] | None = None
 ) -> PlanningInputs {
     task_list = tasks or [];
     return PlanningInputs(
@@ -42,7 +43,9 @@ def week_inputs(
         calendar=CalendarStatus(state="connected", detail="Connected", calendars=["primary"], names=names),
         course_count=1,
         shown=shown or [],
-        all_day=all_day or []
+        all_day=all_day or [],
+        colors={"EECS 445": "rose"},
+        links=links or {}
     );
 }
 
@@ -145,4 +148,30 @@ test "the view reports whether event names are available" {
     assert calendar_view(week_inputs([], names=True), at(0, 8), 0).names;
     assert not calendar_view(week_inputs([], names=False), at(0, 8), 0).names;
     assert calendar_view(week_inputs([]), at(0, 8), 0).connected;
+}
+
+test "course colors reach classes, events, tasks and all-day items" {
+    events = [CalendarEvent(title="EECS 445 Lecture", start=at(1, 11), end=at(1, 12), source="class", course_code="EECS 445")];
+    task = PlanTask(task_id="t1", title="Implement the loop", tier=CognitiveTier.DEEP_WORK, minutes=50, group_id="p2");
+    exam = AllDayEvent(title="EECS 445 midterm", start_date=date(2026, 10, 6), end_date=date(2026, 10, 7), course_code="EECS 445");
+
+    view = calendar_view(week_inputs(events, tasks=[task], all_day=[exam]), at(1, 9), 0);
+
+    tuesday = day(view, "2026-10-06");
+    assert {i.kind: i.color for i in tuesday.items} == {"class": "rose", "task": "rose"};
+    assert tuesday.all_day[0].color == "rose";
+}
+
+test "only named Google events can be linked, and hand-made links are flagged" {
+    events = [
+        CalendarEvent(title="Wiens office hours", start=at(1, 14), end=at(1, 15), source="google", course_code="EECS 445"),
+        CalendarEvent(title="Busy", start=at(1, 16), end=at(1, 17), source="busy"),
+        CalendarEvent(title="EECS 445 Lecture", start=at(1, 11), end=at(1, 12), source="class", course_code="EECS 445")
+    ];
+
+    view = calendar_view(week_inputs(events, links={"wiens office hours": "EECS 445"}), at(0, 8), 0);
+
+    items = {i.title: i for i in day(view, "2026-10-06").items};
+    assert (items["Wiens office hours"].linkable, items["Wiens office hours"].linked) == (True, True);
+    assert (items["Busy"].linkable, items["EECS 445 Lecture"].linkable) == (False, False);
 }

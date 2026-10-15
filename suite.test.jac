@@ -29,6 +29,9 @@ glob PROTECTED_CALLS: dict[str, dict[str, any]] = {
     "get_week": {},
     "get_calendar": {"week_offset": 0},
     "set_course_tags": {"course_id": "x", "tags": ["ML"]},
+    "set_course_color": {"course_id": "x", "color": "rose"},
+    "link_event": {"event_title": "Lecture", "course_id": ""},
+    "unlink_event": {"event_title": "Lecture"},
     "preview_fit": {"title": "T", "due_at": "", "subtasks": []},
     "reschedule_task": {"task_id": "x"},
     "skip_task_today": {"task_id": "x"}

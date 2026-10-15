@@ -9,7 +9,8 @@ column side by side: each gets a `lane` out of `lanes`.
 """
 
 import from datetime { date, datetime, time, timedelta }
-import from planner.inputs { AllDayEvent, PlanningInputs }
+import from courses.matching { normalize }
+import from planner.inputs { AllDayEvent, CourseChoice, PlanningInputs }
 import from scheduling.planner {
     CalendarEvent,
     PlanRules,
@@ -34,6 +35,9 @@ obj CalendarItem {
     has end_minute: int;
     has course_code: str = "";
     has tier: str = "";
+    has color: str = "";
+    has linkable: bool = False;
+    has linked: bool = False;
     has lane: int = 0;
     has lanes: int = 1;
 }
@@ -41,6 +45,7 @@ obj CalendarItem {
 obj AllDayItem {
     has title: str;
     has course_code: str = "";
+    has color: str = "";
 }
 
 obj CalendarDay {
@@ -62,6 +67,7 @@ obj CalendarView {
     has now_minute: int;
     has connected: bool;
     has names: bool;
+    has courses: list[CourseChoice] = [];
 }
 
 def clamp_offset(week_offset: int) -> int {
@@ -102,8 +108,18 @@ def event_detail(event: CalendarEvent, start: datetime, end: datetime, rules: Pl
     return " · ".join(parts);
 }
 
-"""The part of an event that falls on `day`, or None. Multi-day events become one piece per day."""
-def event_piece(event: CalendarEvent, blocking: bool, day: date, rules: PlanRules, index: int) -> CalendarItem | None {
+"""The part of an event that falls on `day`, or None. Multi-day events become one piece per day.
+
+Named Google events are `linkable`: the student can tie them to a course by hand.
+"""
+def event_piece(
+    event: CalendarEvent,
+    blocking: bool,
+    day: date,
+    inputs: PlanningInputs,
+    index: int
+) -> CalendarItem | None {
+    rules = inputs.rules;
     day_start = at_local(day, time(0), rules.zone);
     day_end = at_local(day + timedelta(days=1), time(0), rules.zone);
     if event.end <= day_start or event.start >= day_end {
@@ -118,7 +134,10 @@ def event_piece(event: CalendarEvent, blocking: bool, day: date, rules: PlanRule
         detail=event_detail(event, event.start, event.end, rules),
         start_minute=minute_of_day(start, day, rules),
         end_minute=minute_of_day(end, day, rules),
-        course_code=event.course_code
+        course_code=event.course_code,
+        color=inputs.colors.get(event.course_code, ""),
+        linkable=event.source == "google",
+        linked=normalize(event.title) in inputs.links
     );
 }
 
@@ -179,6 +198,9 @@ def close_cluster(cluster: list[tuple[CalendarItem, int]], lanes: int) -> list[C
             end_minute=item.end_minute,
             course_code=item.course_code,
             tier=item.tier,
+            color=item.color,
+            linkable=item.linkable,
+            linked=item.linked,
             lane=lane,
             lanes=lanes
         )
@@ -186,9 +208,9 @@ def close_cluster(cluster: list[tuple[CalendarItem, int]], lanes: int) -> list[C
     ];
 }
 
-def all_day_on(events: list[AllDayEvent], day: date) -> list[AllDayItem] {
+def all_day_on(events: list[AllDayEvent], day: date, colors: dict[str, str]) -> list[AllDayItem] {
     return [
-        AllDayItem(title=e.title, course_code=e.course_code)
+        AllDayItem(title=e.title, course_code=e.course_code, color=colors.get(e.course_code, ""))
         for e in events
         if e.start_date <= day < e.end_date
     ];
@@ -215,7 +237,7 @@ def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> Ca
             for (index, (event, blocking)) in enumerate(
                 [(e, True) for e in inputs.events] + [(e, False) for e in inputs.shown]
             )
-            for piece in [event_piece(event, blocking, day, rules, index)]
+            for piece in [event_piece(event, blocking, day, inputs, index)]
             if piece is not None
         ];
         protected = [protected_item(block, day, n) for (n, block) in enumerate(inputs.protected)];
@@ -228,7 +250,8 @@ def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> Ca
                 start_minute=minute_of_day(p.start, day, rules),
                 end_minute=minute_of_day(p.end, day, rules),
                 course_code=inputs.info[p.task_id].course_code,
-                tier=inputs.info[p.task_id].tier
+                tier=inputs.info[p.task_id].tier,
+                color=inputs.colors.get(inputs.info[p.task_id].course_code, "")
             )
             for p in plan.placements
             if local_day(p.start, rules.zone) == day
@@ -241,7 +264,7 @@ def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> Ca
                 date_label=f"{day.strftime('%b')} {day.day}",
                 is_today=day == today,
                 items=assign_lanes(items),
-                all_day=all_day_on(inputs.all_day, day)
+                all_day=all_day_on(inputs.all_day, day, inputs.colors)
             )
         ];
     }
@@ -257,6 +280,7 @@ def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> Ca
         end_minute=round_up_hour(bottom),
         now_minute=minute_of_day(now, today, rules) if first <= today <= last else -1,
         connected=inputs.calendar.state == "connected" or inputs.calendar.state == "error",
-        names=inputs.calendar.names
+        names=inputs.calendar.names,
+        courses=inputs.choices
     );
 }

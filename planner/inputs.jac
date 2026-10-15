@@ -19,6 +19,8 @@ import from courses.schema {
     Task,
     all_courses,
     assignments_of,
+    ensure_colors,
+    event_links,
     meetings_of,
     steps_of
 }
@@ -55,6 +57,13 @@ obj MeetingSpec {
     has course_code: str = "";
 }
 
+"""A course the student can link an event to, with its color."""
+obj CourseChoice {
+    has id: str;
+    has code: str;
+    has color: str;
+}
+
 """An all-day calendar entry; `end_date` is exclusive, as Google sends it. Never blocks time."""
 obj AllDayEvent {
     has title: str;
@@ -75,6 +84,9 @@ obj PlanningInputs {
     has course_count: int;
     has shown: list[CalendarEvent] = [];
     has all_day: list[AllDayEvent] = [];
+    has colors: dict[str, str] = {};
+    has links: dict[str, str] = {};
+    has choices: list[CourseChoice] = [];
 }
 
 """One dated event per meeting per matching weekday."""
@@ -98,7 +110,10 @@ def expand_meetings(meetings: list[MeetingSpec], days: list[date], rules: PlanRu
 "show as free" (shown, never planned around), and all-day events.
 """
 def google_events(
-    entries: list[CalendarEntry], matchers: list[CourseMatcher], named: bool
+    entries: list[CalendarEntry],
+    matchers: list[CourseMatcher],
+    named: bool,
+    overrides: dict[str, str] | None = None
 ) -> tuple[list[CalendarEvent], list[CalendarEvent], list[AllDayEvent]] {
     source = "google" if named else "busy";
     timed = [
@@ -108,7 +123,7 @@ def google_events(
             end=e.end,
             detail=e.location,
             source=source,
-            course_code=match_course(e.title, matchers) if named else ""
+            course_code=match_course(e.title, matchers, overrides) if named else ""
         ))
         for e in entries
         if e.start is not None and e.end is not None
@@ -118,7 +133,7 @@ def google_events(
             title=e.title,
             start_date=e.start_date,
             end_date=e.end_date,
-            course_code=match_course(e.title, matchers)
+            course_code=match_course(e.title, matchers, overrides)
         )
         for e in entries
         if e.start_date is not None and e.end_date is not None
@@ -222,7 +237,14 @@ def load_inputs(
     profile = ensure_profile();
     base_rules = rules_for(profile);
     rules = with_horizon(base_rules, horizon_days) if horizon_days else base_rules;
+    ensure_colors();
     courses = all_courses();
+    code_by_id = {jid(c): c.code for c in courses};
+    overrides = {
+        link.key: code_by_id.get(link.course_id, "")
+        for link in event_links()
+        if not link.course_id or link.course_id in code_by_id
+    };
     steps = open_steps(courses);
     meetings = [meeting_spec(course, m) for course in courses for m in meetings_of(course)];
     groups = [
@@ -235,7 +257,7 @@ def load_inputs(
     window_end = max([plan_end] + ([show_until] if show_until else []));
     (entries, calendar) = google_entries(window_start, window_end);
     matchers = [course_matcher(c.code, c.name, c.tags) for c in courses];
-    (blocking, shown, all_day) = google_events(entries, matchers, calendar.names);
+    (blocking, shown, all_day) = google_events(entries, matchers, calendar.names, overrides);
     return PlanningInputs(
         rules=rules,
         display_name=profile.display_name,
@@ -247,6 +269,9 @@ def load_inputs(
         calendar=calendar,
         course_count=len(courses),
         shown=shown,
-        all_day=all_day
+        all_day=all_day,
+        colors={c.code: c.color for c in courses},
+        links=overrides,
+        choices=[CourseChoice(id=jid(c), code=c.code, color=c.color) for c in courses]
     );
 }

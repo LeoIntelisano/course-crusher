@@ -7,6 +7,8 @@ import from .store {
     add_course,
     add_meeting,
     list_courses,
+    set_course_color,
+    unlink_event,
     remove_assignment,
     remove_course,
     remove_meeting,
@@ -47,6 +49,8 @@ def:pub CoursesPage -> JsxElement {
     async def deleteAssignment(assignment_id: str) -> None;
     async def toggleTask(task_id: str, done: bool) -> None;
     async def saveTags(course_id: str, tags: list[str]) -> None;
+    async def saveColor(course_id: str, color: str) -> None;
+    async def unlinkEvent(title: str) -> None;
 
     def toggleDay(day: int) {
         meeting_days = [d for d in meeting_days if d != day] if day in meeting_days else meeting_days + [day];
@@ -137,6 +141,8 @@ def:pub CoursesPage -> JsxElement {
                 adding={meeting_course == course.id}
                 onAddTime={lambda (course_id: str) { meeting_course = course_id; meeting_days = []; }}
                 onSetTags={saveTags}
+                onSetColor={saveColor}
+                onUnlink={unlinkEvent}
                 onRemoveCourse={deleteCourse}
                 onRemoveMeeting={deleteMeeting}
                 onRemoveAssignment={deleteAssignment}

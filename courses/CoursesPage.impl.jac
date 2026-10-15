@@ -137,3 +137,31 @@ impl CoursesPage.saveTags(course_id: str, tags: list[str]) -> None {
     await apply(result);
     busy = False;
 }
+
+impl CoursesPage.saveColor(course_id: str, color: str) -> None {
+    busy = True;
+    result: CourseResult | None = None;
+    try {
+        result = await set_course_color(course_id, color);
+    } except Exception as err {
+        failure = error_message(err);
+        busy = False;
+        return;
+    }
+    await apply(result);
+    busy = False;
+}
+
+impl CoursesPage.unlinkEvent(title: str) -> None {
+    busy = True;
+    result: CourseResult | None = None;
+    try {
+        result = await unlink_event(title);
+    } except Exception as err {
+        failure = error_message(err);
+        busy = False;
+        return;
+    }
+    await apply(result);
+    busy = False;
+}

@@ -34,12 +34,15 @@ import from courses.store {
     add_assignment,
     add_course,
     add_meeting,
+    link_event,
     list_courses,
     remove_assignment,
     remove_course,
     remove_meeting,
+    set_course_color,
     set_course_tags,
-    set_task_done
+    set_task_done,
+    unlink_event
 }
 import from planner.service {
     ActionResult,

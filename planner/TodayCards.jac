@@ -5,7 +5,7 @@ import from .FocusTimer { FocusTimer }
 import from .views { PlanItem, TimelineBlock, WeekLoad }
 import from ..connections.google_link { CalendarStatus }
 import from ..shared.format { format_minutes, tier_key }
-import from ..shared.styles { BLOCK, BUTTON, BUTTON_GHOST, BUTTON_PRIMARY, CARD, ROW_DOT, TIER_BAR, TIER_DOT }
+import from ..shared.styles { BLOCK, BUTTON, BUTTON_GHOST, BUTTON_PRIMARY, CARD, COURSE_ACCENT, COURSE_BLOCK, COURSE_DOT, ROW_DOT, TIER_BAR, TIER_DOT }
 import from ..shared.ui { CardHeader, PlainChip, TierChip, WarnChip }
 
 glob HERO_BUTTON: str = "flex-1 min-h-[46px] desk:flex-none desk:min-h-0";
@@ -44,7 +44,10 @@ def:pub UpNextCard(
             <span className="inline-flex items-center gap-[5px] text-brand"><span className="text-[11px]" aria-hidden="true">✦</span>Agent pick</span>
         </div>
         <h3 className="mt-[9px] mb-0 max-w-[46ch] text-[18px] font-[650] leading-[1.3] tracking-[-0.4px] desk:text-[20px]">{item.title}</h3>
-        <div className="mt-[5px] text-[13px] text-muted">{course + due}</div>
+        <div className="mt-[5px] flex items-center gap-1.5 text-[13px] text-muted">
+            {item.course_color and <span className={COURSE_DOT.get(item.course_color, "")} aria-hidden="true"></span>}
+            {course + due}
+        </div>
         <div className="mt-3 flex flex-wrap gap-[7px]">
             <TierChip tier={item.tier} />
             <PlainChip text={f"{item.minutes} min"} />
@@ -76,7 +79,10 @@ def:pub QueueRow(item: PlanItem, busy: bool, onDone: Callable[[str], None]) -> J
         <span className={ROW_DOT[tier_key(item.tier)]} aria-hidden="true"></span>
         <span className="min-w-0 flex-1">
             <div className="text-[13.5px] font-semibold tracking-[-0.1px] desk:truncate">{item.title}</div>
-            <div className="mt-0.5 text-[12px] text-muted">{f"{item.course_code} · {item.tier}"}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
+                {item.course_color and <span className={COURSE_DOT.get(item.course_color, "")} aria-hidden="true"></span>}
+                {f"{item.course_code} · {item.tier}"}
+            </div>
         </span>
         <span className="flex flex-none flex-col items-end gap-0.5 desk:flex-row desk:items-center desk:gap-3.5">
             <span className="hidden w-[46px] text-right text-[12px] tabular-nums text-faint desk:block">{f"{item.minutes} min"}</span>
@@ -144,9 +150,13 @@ def:pub WeekLoadCard(week: WeekLoad) -> JsxElement {
     </section>
 }
 
+"""Planned blocks keep their tier color with a course-colored edge; course events use the course color."""
 def block_style(block: TimelineBlock) -> str {
     if block.kind == "task" {
-        return BLOCK[tier_key(block.tier)];
+        return BLOCK[tier_key(block.tier)] + " " + COURSE_ACCENT.get(block.color, "");
+    }
+    if block.kind == "event" and block.color {
+        return "rounded-sm px-[9px] py-1.5 text-[11.5px] leading-[1.3] " + COURSE_BLOCK.get(block.color, "");
     }
     return BLOCK.get(block.kind, BLOCK["event"]);
 }

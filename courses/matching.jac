@@ -6,6 +6,9 @@ An event belongs to a course when its name contains, as whole words:
 - the course name (four characters or longer), or
 - one of the student's own tags for the course ("ML", "Hutchins 100").
 
+An event name the student linked by hand skips all of that: `overrides` maps its
+normalized name to a course code, or to "" for "not a class".
+
 Matching ignores case and punctuation. When several courses match, the longest
 matching phrase wins, so "EECS 445 Lab" picks EECS 445 over a course tagged "Lab".
 Pure, so both the planner and the tests use it directly.
@@ -47,8 +50,11 @@ def course_matcher(code: str, name: str, tags: list[str]) -> CourseMatcher {
 }
 
 """The code of the course an event name belongs to, or "" when none matches."""
-def match_course(title: str, matchers: list[CourseMatcher]) -> str {
+def match_course(title: str, matchers: list[CourseMatcher], overrides: dict[str, str] | None = None) -> str {
     text = normalize(title);
+    if overrides is not None and text in overrides {
+        return overrides[text];
+    }
     best_code = "";
     best_length = 0;
     for matcher in matchers {

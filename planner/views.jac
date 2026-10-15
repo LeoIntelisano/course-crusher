@@ -48,6 +48,7 @@ obj PlanItem {
     has due_label: str = "";
     has days_left: int = -1;
     has late: bool = False;
+    has course_color: str = "";
 }
 
 obj UpNext {
@@ -64,6 +65,7 @@ obj TimelineBlock {
     has end: str;
     has tier: str = "";
     has course_code: str = "";
+    has color: str = "";
 }
 
 obj WeekLoad {
@@ -117,7 +119,7 @@ def days_left(due: datetime | None, rules: PlanRules, today: date) -> int {
     return (local_day(due, rules.zone) - today).days;
 }
 
-def plan_item(info: TaskInfo, placement: Placement, rules: PlanRules, today: date, late: set[str]) -> PlanItem {
+def plan_item(info: TaskInfo, placement: Placement, rules: PlanRules, today: date, late: set[str], colors: dict[str, str] | None = None) -> PlanItem {
     start = placement.start.astimezone(rules.zone);
     end = placement.end.astimezone(rules.zone);
     return PlanItem(
@@ -134,7 +136,8 @@ def plan_item(info: TaskInfo, placement: Placement, rules: PlanRules, today: dat
         range_label=range_label(start, end),
         due_label=due_label(info.due.astimezone(rules.zone), today) if info.due is not None else "",
         days_left=days_left(info.due, rules, today),
-        late=info.task_id in late
+        late=info.task_id in late,
+        course_color=(colors or {}).get(info.course_code, "")
     );
 }
 
@@ -224,7 +227,7 @@ def event_detail(event: CalendarEvent, span: str) -> str {
     return " · ".join(parts);
 }
 
-def event_block(event: CalendarEvent, rules: PlanRules) -> TimelineBlock {
+def event_block(event: CalendarEvent, rules: PlanRules, colors: dict[str, str] | None = None) -> TimelineBlock {
     start = event.start.astimezone(rules.zone);
     end = event.end.astimezone(rules.zone);
     return TimelineBlock(
@@ -234,11 +237,12 @@ def event_block(event: CalendarEvent, rules: PlanRules) -> TimelineBlock {
         hour_label=hour_label(start),
         start=start.isoformat(),
         end=end.isoformat(),
-        course_code=event.course_code
+        course_code=event.course_code,
+        color=(colors or {}).get(event.course_code, "")
     );
 }
 
-def task_block(info: TaskInfo, placement: Placement, rules: PlanRules) -> TimelineBlock {
+def task_block(info: TaskInfo, placement: Placement, rules: PlanRules, colors: dict[str, str] | None = None) -> TimelineBlock {
     start = placement.start.astimezone(rules.zone);
     end = placement.end.astimezone(rules.zone);
     return TimelineBlock(
@@ -248,13 +252,15 @@ def task_block(info: TaskInfo, placement: Placement, rules: PlanRules) -> Timeli
         hour_label=hour_label(start),
         start=start.isoformat(),
         end=end.isoformat(),
-        tier=info.tier
+        tier=info.tier,
+        course_code=info.course_code,
+        color=(colors or {}).get(info.course_code, "")
     );
 }
 
 def day_blocks(inputs: PlanningInputs, placements: list[Placement], day: date) -> list[TimelineBlock] {
     rules = inputs.rules;
-    events = [event_block(e, rules) for e in inputs.events if local_day(e.start, rules.zone) == day];
+    events = [event_block(e, rules, inputs.colors) for e in inputs.events if local_day(e.start, rules.zone) == day];
     protected = [
         TimelineBlock(
             kind="protected",
@@ -266,7 +272,7 @@ def day_blocks(inputs: PlanningInputs, placements: list[Placement], day: date) -
         )
         for block in inputs.protected
     ];
-    tasks = [task_block(inputs.info[p.task_id], p, rules) for p in placements];
+    tasks = [task_block(inputs.info[p.task_id], p, rules, inputs.colors) for p in placements];
     return sorted(events + protected + tasks, key=lambda (b: TimelineBlock) -> str { return b.start; });
 }
 
@@ -322,11 +328,11 @@ def today_view(inputs: PlanningInputs, now: datetime) -> TodayView {
     queue: list[PlanItem] = [];
     if chosen is not None {
         up_next = UpNext(
-            item=plan_item(inputs.info[chosen.task_id], chosen, rules, today, late),
+            item=plan_item(inputs.info[chosen.task_id], chosen, rules, today, late, inputs.colors),
             why=why_now(inputs, plan, chosen, now)
         );
         queue = [
-            plan_item(inputs.info[p.task_id], p, rules, today, late)
+            plan_item(inputs.info[p.task_id], p, rules, today, late, inputs.colors)
             for p in todays
             if p.task_id != chosen.task_id and p.start >= chosen.start
         ];
@@ -365,7 +371,7 @@ def week_view(inputs: PlanningInputs, now: datetime) -> WeekView {
             DayPlan(
                 day_label=day_label(day, today),
                 date_label=date_label(day),
-                items=[plan_item(inputs.info[p.task_id], p, rules, today, late) for p in placed],
+                items=[plan_item(inputs.info[p.task_id], p, rules, today, late, inputs.colors) for p in placed],
                 events=[b for b in day_blocks(inputs, [], day) if b.kind != "protected"],
                 total_minutes=sum([minutes_between(p.start, p.end) for p in placed])
             )

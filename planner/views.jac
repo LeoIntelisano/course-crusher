@@ -30,7 +30,6 @@ import from scheduling.planner {
 import from shared.format { format_minutes, initials }
 import from shared.timefmt { clock_label, date_label, day_label, due_label, hour_label, range_label }
 
-glob GOOGLE_DETAIL: str = "Google Calendar";
 glob DAYS_PER_WEEK: int = 7;
 glob GAP_IN_MINUTES_BELOW: int = 120;
 
@@ -64,6 +63,7 @@ obj TimelineBlock {
     has start: str;
     has end: str;
     has tier: str = "";
+    has course_code: str = "";
 }
 
 obj WeekLoad {
@@ -215,18 +215,26 @@ def why_now(inputs: PlanningInputs, plan: Plan, chosen: Placement, now: datetime
     return " ".join([part for part in [" and ".join(reasons) + ".", deadline] if part]);
 }
 
+"""The time, where, and which course, skipping the course when the title already names it."""
+def event_detail(event: CalendarEvent, span: str) -> str {
+    parts = [span] + ([event.detail] if event.detail else []);
+    if event.course_code and event.course_code.lower() not in event.title.lower() {
+        parts = parts + [event.course_code];
+    }
+    return " · ".join(parts);
+}
+
 def event_block(event: CalendarEvent, rules: PlanRules) -> TimelineBlock {
     start = event.start.astimezone(rules.zone);
     end = event.end.astimezone(rules.zone);
-    span = range_label(start, end);
-    google = event.detail == GOOGLE_DETAIL;
     return TimelineBlock(
-        kind="busy" if google else "event",
+        kind="busy" if event.source == "busy" else "event",
         title=event.title,
-        detail=span if google or not event.detail else f"{span} · {event.detail}",
+        detail=event_detail(event, range_label(start, end)),
         hour_label=hour_label(start),
         start=start.isoformat(),
-        end=end.isoformat()
+        end=end.isoformat(),
+        course_code=event.course_code
     );
 }
 

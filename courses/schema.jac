@@ -9,9 +9,11 @@ caller's own root, so an ID from another account simply isn't found.
 
 import from breakdown { CognitiveTier }
 
+"""`tags` are extra names the student uses for the course in calendar events, e.g. "ML"."""
 node Course {
     has code: str;
     has name: str = "";
+    has tags: list[str] = [];
 }
 
 """A weekly class meeting. `weekdays` uses Python's numbering: Monday is 0."""

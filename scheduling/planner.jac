@@ -51,12 +51,17 @@ obj PlanTask {
     has not_before: datetime | None = None;
 }
 
-"""A fixed calendar commitment, such as a lecture, or an anonymous Google busy block."""
+"""A fixed calendar commitment: a class time, a named Google event, or an anonymous busy block.
+
+`source` is "class", "google" or "busy"; `course_code` is set when the event belongs to a course.
+"""
 obj CalendarEvent {
     has title: str;
     has start: datetime;
     has end: datetime;
     has detail: str = "";
+    has source: str = "";
+    has course_code: str = "";
 }
 
 """Time the student keeps free every day, such as dinner and the gym."""

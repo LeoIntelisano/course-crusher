@@ -24,7 +24,8 @@ import from pathlib { Path }
 import from google.auth.transport.requests { Request }
 import from google.oauth2.credentials { Credentials }
 import from google_auth_oauthlib.flow { Flow }
-import from connectors.google_calendar { CalendarAuthError, GOOGLE_SCOPES }
+import from connectors.google_calendar { CalendarAuthError }
+import from connectors.google_events { EVENT_SCOPES }
 
 glob WEB_CLIENT_SECRETS_ENV: str = "GOOGLE_WEB_CLIENT_SECRETS_FILE";
 glob REDIRECT_URI_ENV: str = "GOOGLE_OAUTH_REDIRECT_URI";
@@ -86,7 +87,7 @@ def client_config -> dict[str, str] {
 def new_flow(state: str = "", code_verifier: str = "") -> Flow {
     return Flow.from_client_secrets_file(
         web_client_file(),
-        scopes=GOOGLE_SCOPES,
+        scopes=EVENT_SCOPES,
         redirect_uri=redirect_uri(),
         state=state or None,
         code_verifier=code_verifier or None
@@ -128,7 +129,7 @@ def credentials_from_token(token_json: str) -> Credentials {
         token_uri=config["token_uri"],
         client_id=config["client_id"],
         client_secret=config["client_secret"],
-        scopes=stored.get("scopes") or GOOGLE_SCOPES,
+        scopes=stored.get("scopes") or EVENT_SCOPES,
         expiry=expiry
     );
 }

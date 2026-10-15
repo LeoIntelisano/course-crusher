@@ -45,6 +45,8 @@ glob MAX_SUBTASK_MINUTES: int = 480;
 glob MAX_COURSES: int = 20;
 glob MAX_MEETINGS_PER_COURSE: int = 10;
 glob MAX_OPEN_TASKS: int = 400;
+glob MAX_TAGS: int = 10;
+glob MAX_TAG_LENGTH: int = 40;
 glob WEEKDAY_NAMES: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 """A subtask the student confirmed on the Breakdown screen, possibly edited."""
@@ -88,6 +90,7 @@ obj CourseView {
     has id: str;
     has code: str;
     has name: str;
+    has tags: list[str];
     has meetings: list[MeetingView];
     has assignments: list[AssignmentView];
     has open_tasks: int;
@@ -173,6 +176,7 @@ def course_view(course: Course) -> CourseView {
         id=jid(course),
         code=course.code,
         name=course.name,
+        tags=course.tags,
         meetings=[meeting_view(m) for m in meetings_of(course)],
         assignments=assignments,
         open_tasks=len(open_steps),
@@ -227,6 +231,23 @@ def:protect remove_course(course_id: str) -> CourseResult {
         del meeting;
     }
     del course;
+    return ok_courses();
+}
+
+"""The names this course goes by in calendar events, beyond its code and name."""
+def:protect set_course_tags(course_id: str, tags: list[str]) -> CourseResult {
+    course = find_course(course_id);
+    if course is None {
+        return failed("That course no longer exists.");
+    }
+    cleaned = list(dict.fromkeys([single_line(tag) for tag in tags if single_line(tag)]));
+    if len(cleaned) > MAX_TAGS {
+        return failed(f"Keep up to {MAX_TAGS} calendar names per course.");
+    }
+    if [tag for tag in cleaned if len(tag) > MAX_TAG_LENGTH] {
+        return failed(f"Keep each calendar name under {MAX_TAG_LENGTH} characters.");
+    }
+    course.tags = cleaned;
     return ok_courses();
 }
 

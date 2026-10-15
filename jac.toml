@@ -1,18 +1,36 @@
 [project]
 name = "course-crusher"
 version = "0.1.0"
-description = "Command-line Jac project"
-entry-point = "main"
-kind = "cli"
+description = "Breaks assignments into subtasks and fits them into a student's free time"
 jac-version = "==0.37.23"
+default-app = "web"
+
+# `jac run` serves the web app; `jac run cli -- free-slots ...` runs the CLI.
+[apps.web]
+kind = "web-app"
+entry-point = "web"
+
+[apps.cli]
+kind = "cli"
+entry-point = "main"
+
+# Markerless pure modules would otherwise compile native; nothing here needs it.
+[placement]
+default = "server"
 
 [dependencies]
 google-auth = "~=2.60"
 google-auth-oauthlib = "~=1.5"
 requests = "~=2.34"
+# Zone data for slim images with no system tz database
+tzdata = ">=2024.1"
 
 [byllm.model]
-default_model = "gpt-4o-mini"
+default_model = "${LLM_MODEL:-gpt-4o-mini}"
+
+# Bootstrap admin for /admin (logs, LLM telemetry). Set the password before any shared deploy.
+[scale.admin]
+default_password = "${JAC_ADMIN_PASSWORD:-changeme}"
 
 [dev-dependencies]
 watchdog = ">=3.0.0"

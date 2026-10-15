@@ -1,0 +1,7 @@
+[
+  {"title": "Set up train.py skeleton and data loader", "tier": "Deep Work", "estimated_duration": 35},
+  {"title": "Implement the gradient descent loop", "tier": "Deep Work", "estimated_duration": 50},
+  {"title": "Run the learning-rate ablation and save loss curves", "tier": "Shallow Work", "estimated_duration": 25},
+  {"title": "Draft the report method and results", "tier": "Deep Work", "estimated_duration": 60},
+  {"title": "Proofread and submit to Canvas", "tier": "Low Energy", "estimated_duration": 30}
+]

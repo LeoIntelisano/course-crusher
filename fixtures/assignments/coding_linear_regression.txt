@@ -1,0 +1,3 @@
+EECS 445 Project 2: Linear Regression from Scratch. Due Wednesday 11:59 PM.
+
+Implement batch gradient descent for linear regression in project2.py without using scikit-learn's model classes. Complete the three TODO functions: compute_loss, compute_gradient, and gradient_descent. Run your implementation on the provided housing.csv dataset with learning rates 0.001, 0.01, and 0.1, and plot training loss against iteration for each rate on a single figure. In a one-page writeup (PDF), report the final training loss for each learning rate and explain in two or three sentences why the largest learning rate behaves differently. Submit project2.py and writeup.pdf to Gradescope.

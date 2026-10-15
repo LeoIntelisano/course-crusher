@@ -1,5 +1,9 @@
 # CourseCrusher — UI wireframe
 
+The working app is built from this wireframe and lives at the repository root
+(see `../README.md`). This page stays as the design reference; its tokens are in
+`styles/app.css` and its screens are the Today and Breakdown routes.
+
 `index.html` is the wireframe. Open it in a browser; no build step, no dependencies.
 
 ```bash

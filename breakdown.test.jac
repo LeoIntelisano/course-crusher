@@ -1,7 +1,10 @@
+import json;
 import sys;
 import from contextlib { redirect_stderr }
 import from io { StringIO }
 import from pathlib { Path }
+import from tempfile { TemporaryDirectory }
+import from datetime { datetime, timedelta, timezone }
 import from unittest.mock { patch }
 import from jaclang.byllm.lib { MockLLM }
 
@@ -195,4 +198,94 @@ test "the CLI reports model failures with a message" {
     assert code == 1;
     assert err.startswith("breakdown: The model call failed");
     assert "Traceback" not in err;
+}
+
+def run_endpoint(model: MockLLM, text: str) -> BreakdownResult {
+    with patch.object(sys.modules[extract_subtasks.__module__], "llm", model, create=True) {
+        return breakdown_result(text);
+    }
+}
+
+test "the endpoint returns validated subtasks" {
+    model = MockLLM(outputs=[[
+        step("  Outline the report ", CognitiveTier.SHALLOW_WORK, 20, 4, "x"),
+        step("Draft the discussion", CognitiveTier.DEEP_WORK, 45, 4, "x")
+    ]]);
+
+    result = run_endpoint(model, assignment("writing_lab_report"));
+
+    assert result.ok and result.error == "";
+    assert_contract(result.subtasks);
+    assert result.subtasks[0].title == "Outline the report";
+}
+
+test "the endpoint explains empty and oversized input without calling the model" {
+    model = MockLLM(outputs=[]);
+    with patch.object(sys.modules[extract_subtasks.__module__], "llm", model, create=True) {
+        empty = break_down_assignment("   ");
+        oversized = break_down_assignment("x" * (MAX_ASSIGNMENT_CHARS + 1));
+    }
+
+    assert not empty.ok and empty.error == "Assignment description cannot be empty.";
+    assert not oversized.ok and "at most" in oversized.error;
+}
+
+test "the endpoint reports invalid model output as a message" {
+    result = run_endpoint(MockLLM(outputs=[[step("Outline", CognitiveTier.SHALLOW_WORK, 0)]]), "Write the report");
+
+    assert not result.ok and result.error == "A subtask duration must be positive.";
+}
+
+test "the endpoint hides model failures behind a friendly message" {
+    result = run_endpoint(MockLLM(outputs=["not a subtask list"] * 5), assignment("writing_lab_report"));
+
+    assert not result.ok;
+    assert result.error == "The AI breakdown isn't available right now. Try again in a minute.";
+    assert "Traceback" not in result.error;
+}
+
+test "the fixture model answers every breakdown with canned steps" {
+    module = sys.modules[extract_subtasks.__module__];
+    had_override = hasattr(module, "llm");
+    previous = getattr(module, "llm", None);
+    with TemporaryDirectory() as tmp {
+        fixture = Path(tmp) / "steps.json";
+        fixture.write_text(json.dumps([
+            {"title": "Read the brief", "tier": "Low Energy", "estimated_duration": 10},
+            {"title": "Write the code", "tier": "Deep Work", "estimated_duration": 60}
+        ]), encoding="utf-8");
+        try {
+            install_fixture_model(str(fixture));
+            first = break_down("Anything at all");
+            second = break_down("Something else");
+        } finally {
+            if had_override {
+                setattr(module, "llm", previous);
+            } else {
+                delattr(module, "llm");
+            }
+        }
+    }
+    assert [(s.title, s.tier, s.estimated_duration) for s in first] == [
+        ("Read the brief", CognitiveTier.LOW_ENERGY, 10), ("Write the code", CognitiveTier.DEEP_WORK, 60)
+    ];
+    assert [s.subtask_id for s in second] == ["subtask-1", "subtask-2"];
+}
+
+test "the hourly quota stops model calls past the limit" {
+    usage = BreakdownUsage();
+    start = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc);
+
+    allowed = [consume_quota(usage, start + timedelta(seconds=n)) for n in range(BREAKDOWNS_PER_HOUR)];
+    refused = consume_quota(usage, start + timedelta(minutes=30));
+
+    assert all(allowed) and not refused;
+    assert usage.calls == BREAKDOWNS_PER_HOUR;
+}
+
+test "the quota resets after an hour" {
+    usage = BreakdownUsage(window_start="2026-10-06T12:00:00+00:00", calls=BREAKDOWNS_PER_HOUR);
+
+    assert consume_quota(usage, datetime(2026, 10, 6, 13, 0, 1, tzinfo=timezone.utc));
+    assert usage.calls == 1;
 }

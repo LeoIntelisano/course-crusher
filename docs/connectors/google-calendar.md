@@ -86,6 +86,11 @@ the narrower free/busy scope.
   (tags set on the Courses screen, e.g. "ML"). Matching ignores case and
   punctuation, works on whole words, and the longest match wins
   (`courses/matching.jac`).
+- A link made by hand on the Today calendar ("this event is EECS 445", or "not
+  a class") applies to every event with that name and beats automatic matching.
+  Links are stored per student as the event name and the chosen course only.
+- Each course has a color from a fixed palette; its classes, matched events and
+  planned blocks are drawn in it.
 - Nothing is copied into the database. Reads are cached in memory for 60 seconds,
   aligned to whole weeks so Today and the calendar share one request.
 - Links granted before this change only have the free/busy scope. They keep

@@ -1,3 +1,7 @@
 .jac/
 jac.local.toml
 __pycache__/
+
+# OAuth client secrets and tokens belong outside the repo
+client_secret*.json
+*-token.json

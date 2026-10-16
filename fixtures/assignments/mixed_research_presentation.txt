@@ -1,0 +1,3 @@
+EECS 376 Group Presentation: Approximation Algorithms. Due next Thursday in discussion.
+
+Your group of three will give a 10-minute presentation on one approximation algorithm from Chapter 9 of the course notes. Choose the algorithm and email your choice to your GSI by Monday. Read the chapter section on your algorithm and the one assigned paper linked on Canvas. Prepare 8 to 10 slides that state the problem, present the algorithm, prove its approximation ratio, and walk through one worked example. Rehearse the full presentation with your group at least once. Each member must also submit a one-paragraph individual reflection on Canvas after presenting.

@@ -1,7 +1,7 @@
 """The week calendar on Today: Google events with their names and courses, classes, protected hours, planned blocks."""
 
 import from "@jac/runtime" { Link }
-import from .grid { grid_height, hour_marks, hour_text, item_box, now_offset }
+import from .grid { grid_height, hour_marks, hour_text, item_box, minutes_to_px, now_offset }
 import from .service { get_calendar }
 import from .inputs { CourseChoice }
 import from .week_calendar { CalendarDay, CalendarItem, CalendarView }
@@ -9,7 +9,7 @@ import from ..courses.store { CourseResult, link_event, unlink_event }
 import from ..shell.PlannerContext { usePlanner }
 import from ..shared.errors { error_message }
 import from ..shared.format { tier_key }
-import from ..shared.styles { BUTTON, BUTTON_PRIMARY, BUTTON_SMALL, CARD, COURSE_ACCENT, COURSE_BLOCK, FIELD }
+import from ..shared.styles { BUTTON_PRIMARY, BUTTON_SMALL, CARD, COURSE_ACCENT, COURSE_BLOCK, FIELD }
 import from ..shared.ui { CardHeader, Notice }
 
 glob ITEM_BASE: str = "absolute overflow-hidden rounded-[6px] px-1.5 py-1 text-left text-[11px] leading-[1.25]";
@@ -29,6 +29,10 @@ glob DAY_TAB: str = "flex min-w-[44px] flex-col items-center rounded-sm border b
 glob DAY_TAB_ON: str = "flex min-w-[44px] flex-col items-center rounded-sm border border-ink bg-ink px-2 py-1 text-[11px] font-semibold text-white";
 
 glob NOT_A_CLASS: str = "none";
+glob OPEN_LEFT_FROM_COLUMN: int = 4;
+# about the popover's height in grid minutes; closer than this to the bottom, it opens upward
+glob OPEN_UP_WITHIN_MINUTES: int = 270;
+glob POPOVER: str = "fixed inset-x-3 bottom-[84px] z-30 rounded-lg border border-line-strong bg-surface p-3 text-left shadow-[0_8px_24px_rgba(18,21,26,.16)] desk:absolute desk:inset-x-auto desk:w-[272px]";
 
 """Course color for course events; tier color plus a course-colored edge for planned blocks."""
 def item_style(item: CalendarItem) -> str {
@@ -60,13 +64,14 @@ def:pub BlockText(item: CalendarItem) -> JsxElement {
 }
 
 """One block. Named Google events are buttons that open the course picker."""
-def:pub CalendarBlock(item: CalendarItem, gridStart: int, onPick: Callable[[CalendarItem], None]) -> JsxElement {
+def:pub CalendarBlock(item: CalendarItem, gridStart: int, active: bool, onPick: Callable[[CalendarItem], None]) -> JsxElement {
     box = item_box(item.start_minute, item.end_minute, gridStart, item.lane, item.lanes);
     label = item.title + " · " + item.detail;
     if item.linkable {
         return <button
             type="button"
-            className={ITEM_BASE + " cursor-pointer hover:ring-2 hover:ring-ink/20 " + item_style(item)}
+            aria-expanded={active}
+            className={ITEM_BASE + " cursor-pointer hover:ring-2 hover:ring-ink/20 " + ("z-20 ring-2 ring-ink " if active else "") + item_style(item)}
             style={box}
             title={label + " · click to link a course"}
             aria-label={f"{item.title}, {item.detail}. Link to a course"}
@@ -82,11 +87,19 @@ def:pub CalendarBlock(item: CalendarItem, gridStart: int, onPick: Callable[[Cale
     </div>
 }
 
-"""Pick the course for every event with this name, or mark it "not a class"."""
+"""Pick the course for every event with this name, or mark it "not a class".
+
+Opens beside the clicked event (to the left for the last days of the week, so it
+stays on screen); on phones it's a sheet above the tab bar. Escape, a click
+outside, or × closes it.
+"""
 def:pub EventLinker(
     item: CalendarItem,
     courses: list[CourseChoice],
     busy: bool,
+    columnIndex: int,
+    gridStart: int,
+    gridEnd: int,
     onLink: Callable[[str, str], None],
     onUnlink: Callable[[str], None],
     onClose: Callable[[], None]
@@ -95,6 +108,13 @@ def:pub EventLinker(
     current = [c.id for c in courses if c.code == item.course_code];
     fallback = current[0] if current else (NOT_A_CLASS if item.linked else "");
     selected = choice or fallback;
+    side = "desk:right-[calc(100%+8px)]" if columnIndex >= OPEN_LEFT_FROM_COLUMN else "desk:left-[calc(100%+8px)]";
+    opens_up = gridEnd - item.start_minute < OPEN_UP_WITHIN_MINUTES;
+    vertical = "desk:top-auto desk:bottom-[var(--pop-bottom)]" if opens_up else "desk:bottom-auto desk:top-[var(--pop-top)]";
+    anchor = {
+        "--pop-top": f"{minutes_to_px(item.start_minute - gridStart)}px",
+        "--pop-bottom": f"{minutes_to_px(gridEnd - item.end_minute)}px"
+    };
 
     def save(e: FormEvent) {
         e.preventDefault();
@@ -103,24 +123,48 @@ def:pub EventLinker(
         }
     }
 
-    <form className="mx-2 mb-3 rounded-md border border-line-strong bg-canvas p-3 desk:mx-4" onSubmit={save} aria-label={f"Link {item.title} to a course"}>
-        <div className="text-[13px] font-[650]">{item.title}</div>
-        <div className="text-[11.5px] text-muted">{item.detail}</div>
-        <div className="mt-2 flex flex-wrap items-end gap-2">
-            <label className="flex flex-col text-[12px] font-[650]" htmlFor="link-course">
-                Course
-                <select id="link-course" className={FIELD + " mt-1 w-auto"} value={selected} onChange={lambda (e: ChangeEvent) { choice = e.target.value; }}>
-                    <option value="">Choose a course</option>
-                    {for course in courses { <option key={course.id} value={course.id}>{course.code}</option> }}
-                    <option value={NOT_A_CLASS}>Not a class</option>
-                </select>
-            </label>
-            <button type="submit" className={BUTTON_PRIMARY} disabled={busy or not selected}>Save link</button>
-            {item.linked and <button type="button" className={BUTTON} disabled={busy} onClick={lambda { onUnlink(item.title); }}>Use automatic matching</button>}
-            <button type="button" className={BUTTON_SMALL} onClick={lambda { onClose(); }}>Close</button>
-        </div>
-        <p className="mt-2 mb-0 text-[11.5px] text-muted">{"Applies to every event named “" + item.title + "”, now and in future weeks."}</p>
-    </form>
+    def onKeys(e: KeyboardEvent) {
+        if e.key == "Escape" {
+            onClose();
+        }
+    }
+
+    <>
+        <div className="fixed inset-0 z-20 bg-ink/20 desk:bg-transparent" aria-hidden="true" onClick={lambda { onClose(); }}></div>
+        <form
+            role="dialog"
+            aria-label={f"Link {item.title} to a course"}
+            className={POPOVER + " " + side + " " + vertical}
+            style={anchor}
+            onSubmit={save}
+            onKeyDown={onKeys}
+        >
+            <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-[650]">{item.title}</div>
+                    <div className="truncate text-[11.5px] text-muted">{item.detail}</div>
+                </div>
+                <button type="button" aria-label="Close" className="grid h-6 w-6 flex-none place-items-center rounded-sm text-muted hover:bg-canvas" onClick={lambda { onClose(); }}>×</button>
+            </div>
+            <label className="mt-2 block text-[12px] font-[650]" htmlFor="link-course">Course</label>
+            <select
+                id="link-course"
+                autoFocus={True}
+                className={FIELD + " mt-1"}
+                value={selected}
+                onChange={lambda (e: ChangeEvent) { choice = e.target.value; }}
+            >
+                <option value="">Choose a course</option>
+                {for course in courses { <option key={course.id} value={course.id}>{course.code}</option> }}
+                <option value={NOT_A_CLASS}>Not a class</option>
+            </select>
+            <div className="mt-2 flex flex-wrap gap-2">
+                <button type="submit" className={BUTTON_PRIMARY + " px-3 py-1.5"} disabled={busy or not selected}>Save link</button>
+                {item.linked and <button type="button" className={BUTTON_SMALL} disabled={busy} onClick={lambda { onUnlink(item.title); }}>Use automatic matching</button>}
+            </div>
+            <p className="mt-2 mb-0 text-[11px] text-muted">{"Applies to every event named “" + item.title + "”."}</p>
+        </form>
+    </>
 }
 
 glob AXIS: str = "w-11 flex-none";
@@ -149,7 +193,20 @@ def:pub AllDayCell(day: CalendarDay, visible: bool) -> JsxElement {
     </div>
 }
 
-def:pub DayBody(day: CalendarDay, view: CalendarView, visible: bool, onPick: Callable[[CalendarItem], None]) -> JsxElement {
+def:pub DayBody(
+    day: CalendarDay,
+    view: CalendarView,
+    visible: bool,
+    columnIndex: int,
+    picked: CalendarItem | None,
+    linking: bool,
+    onPick: Callable[[CalendarItem], None],
+    onLink: Callable[[str, str], None],
+    onUnlink: Callable[[str], None],
+    onClose: Callable[[], None]
+) -> JsxElement {
+    picked_key = picked.key if picked is not None else "";
+    here = [i for i in day.items if i.key == picked_key];
     height = grid_height(view.start_minute, view.end_minute);
     line = now_offset(view.now_minute, view.start_minute, view.end_minute) if day.is_today else -1;
     <div className={column_class(visible) + " relative"} style={{"height": f"{height}px"}} aria-label={f"{day.weekday} {day.date_label}"}>
@@ -157,13 +214,36 @@ def:pub DayBody(day: CalendarDay, view: CalendarView, visible: bool, onPick: Cal
             <div key={f"{day.iso_date}-h{hour}"} className="absolute inset-x-0 border-t border-line/70" style={{"top": f"{grid_height(view.start_minute, hour * 60)}px"}}></div>
         }}
         {for item in day.items {
-            <CalendarBlock key={item.key} item={item} gridStart={view.start_minute} onPick={onPick} />
+            <CalendarBlock key={item.key} item={item} gridStart={view.start_minute} active={item.key == picked_key} onPick={onPick} />
         }}
         {line >= 0 and <div className="absolute inset-x-0 z-10 border-t-2 border-danger" style={{"top": f"{line}px"}} aria-label="Now"></div>}
+        {if len(here) > 0 {
+            <EventLinker
+                key={picked_key}
+                item={here[0]}
+                courses={view.courses}
+                busy={linking}
+                columnIndex={columnIndex}
+                gridStart={view.start_minute}
+                gridEnd={view.end_minute}
+                onLink={onLink}
+                onUnlink={onUnlink}
+                onClose={onClose}
+            />
+        }}
     </div>
 }
 
-def:pub WeekGrid(view: CalendarView, selected: int, onPick: Callable[[CalendarItem], None]) -> JsxElement {
+def:pub WeekGrid(
+    view: CalendarView,
+    selected: int,
+    picked: CalendarItem | None,
+    linking: bool,
+    onPick: Callable[[CalendarItem], None],
+    onLink: Callable[[str, str], None],
+    onUnlink: Callable[[str], None],
+    onClose: Callable[[], None]
+) -> JsxElement {
     has_all_day = len([d for d in view.days if len(d.all_day) > 0]) > 0;
     <div className="px-2 pt-2 pb-3 desk:px-4">
         <div className="flex border-b border-r border-line">
@@ -189,7 +269,19 @@ def:pub WeekGrid(view: CalendarView, selected: int, onPick: Callable[[CalendarIt
                 }}
             </div>
             {for (index, day) in enumerate(view.days) {
-                <DayBody key={day.iso_date} day={day} view={view} visible={index == selected} onPick={onPick} />
+                <DayBody
+                    key={day.iso_date}
+                    day={day}
+                    view={view}
+                    visible={index == selected}
+                    columnIndex={index}
+                    picked={picked}
+                    linking={linking}
+                    onPick={onPick}
+                    onLink={onLink}
+                    onUnlink={onUnlink}
+                    onClose={onClose}
+                />
             }}
         </div>
     </div>
@@ -297,18 +389,16 @@ def:pub CalendarCard -> JsxElement {
                     </button>
                 }}
             </div>
-            <WeekGrid view={view} selected={selected} onPick={lambda (item: CalendarItem) { picked = item; }} />
-            if picked is not None {
-                <EventLinker
-                    key={picked.key}
-                    item={picked}
-                    courses={view.courses}
-                    busy={linking}
-                    onLink={saveLink}
-                    onUnlink={resetLink}
-                    onClose={lambda { picked = None; }}
-                />
-            }
+            <WeekGrid
+                view={view}
+                selected={selected}
+                picked={picked}
+                linking={linking}
+                onPick={lambda (item: CalendarItem) { picked = item; }}
+                onLink={saveLink}
+                onUnlink={resetLink}
+                onClose={lambda { picked = None; }}
+            />
         }}
         {if view is None and not failure {
             <p className="m-0 px-4 pb-4 text-[12.5px] text-muted">Loading the calendar…</p>

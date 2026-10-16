@@ -29,7 +29,7 @@ def issued_credentials(expiry: datetime) -> Credentials {
         token_uri="https://oauth2.googleapis.com/token",
         client_id="test-client.apps.googleusercontent.com",
         client_secret="test-client-secret",
-        scopes=GOOGLE_SCOPES,
+        scopes=EVENT_SCOPES,
         expiry=expiry
     );
 }
@@ -81,7 +81,7 @@ test "start_consent returns the URL, state and PKCE verifier" {
         assert consent.url.endswith("prompt=consent");
         assert (consent.state, consent.code_verifier) == ("state-abc", "verifier-123");
         assert factory.call_args.kwargs["redirect_uri"] == "http://localhost:8000/connections/google/callback";
-        assert factory.call_args.kwargs["scopes"] == GOOGLE_SCOPES;
+        assert factory.call_args.kwargs["scopes"] == EVENT_SCOPES;
     }
 }
 

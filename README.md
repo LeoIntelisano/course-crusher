@@ -8,11 +8,11 @@ The UI follows `wireframes/index.html` (kept as the design reference).
 
 | Screen | What works |
 |---|---|
-| **Today** | The agent's pick with a *why now* built from your calendar, energy and deadlines; a real focus timer; Reschedule, Swap task, Not today, Mark done; the rest of today's queue; this week's load by tier; the auto-fitted timeline; connection status |
+| **Today** | The agent's pick with a *why now* built from your calendar, energy and deadlines; a real focus timer; Reschedule, Swap task, Not today, Mark done; the rest of today's queue; this week's load by tier; the auto-fitted timeline; connection status; a week calendar of Google events (by name, in their course's color), class times, protected hours and planned blocks; click an event to link it to a course |
 | **Breakdown** | Paste an assignment → AI subtasks (tier + estimate) → toggle or edit them → live *Where it fits* and *Agent checks* → **Add N to plan**. Nothing is scheduled until you confirm |
 | **Plan** | The next seven days, grouped by day, plus anything that doesn't fit |
-| **Courses** | Courses, weekly class times (treated as fixed events), assignments and their subtasks |
-| **Connections** | Google Calendar (free/busy only) with per-account OAuth |
+| **Courses** | Courses with a color, weekly class times (treated as fixed events), calendar names and linked events that match Google events to the course, assignments and their subtasks |
+| **Connections** | Google Calendar (read-only event names and times) with per-account OAuth |
 | **Settings** | Day start/end, Deep Work cutoff, buffer around classes, shortest slot, protected hours, sign out |
 
 Every endpoint requires sign-in, and each student's data lives on their own graph root.
@@ -119,11 +119,11 @@ Folders hold a feature's server and client code side by side.
 | `main.jac` | CLI entry (`free-slots`) |
 | `breakdown.jac` | AI breakdown: `Subtask` contract, prompt, walker, `break_down_assignment` endpoint |
 | `scheduling/` | `time_slots.jac` (free gaps between busy blocks) and `planner.jac` (the pure scheduling engine) |
-| `planner/` | Loads a student's data (`inputs`), builds the Today/Plan/fit views (`views`, `fit`), endpoints (`service`), and the Today and Plan screens |
-| `courses/` | Course, ClassMeeting, Assignment and Task nodes and endpoints; the Courses and Breakdown screens |
+| `planner/` | Loads a student's data (`inputs`), builds the Today/Plan/fit views and the week calendar (`views`, `fit`, `week_calendar`), endpoints (`service`), and the Today and Plan screens |
+| `courses/` | Course, ClassMeeting, Assignment and Task nodes and endpoints; event-name matching (`matching`); the Courses and Breakdown screens |
 | `account/` | Profile and protected hours; sign-in, sign-up and Settings screens |
 | `connections/` | Per-student Google link and its endpoints; Connections and OAuth callback screens |
-| `connectors/` | Google Calendar freeBusy client (CLI flow) and the web OAuth flow |
+| `connectors/` | Google Calendar freeBusy client (CLI), events client and the web OAuth flow |
 | `shell/` | Routes, layout, sidebar, top bar, tab bar, and the shared planner context |
 | `shared/` | Formatting, time parsing, error messages, Tailwind class strings, small UI pieces |
 | `styles/app.css` | Tailwind v4 with the wireframe's design tokens |

@@ -8,16 +8,21 @@ item) return a result with `ok=False` and a message for the student.
 import from datetime { datetime, timezone }
 import from account.schema { ensure_profile }
 import from breakdown { CognitiveTier }
+import from courses.colors { PALETTE, is_course_color, next_color }
+import from courses.matching { normalize }
 import from courses.schema {
     Assigned,
     Assignment,
     ClassMeeting,
     Course,
+    EventLink,
     MeetsAt,
     Step,
     Task,
     all_courses,
     assignments_of,
+    ensure_colors,
+    event_links,
     find_assignment,
     find_course,
     find_meeting,
@@ -45,6 +50,10 @@ glob MAX_SUBTASK_MINUTES: int = 480;
 glob MAX_COURSES: int = 20;
 glob MAX_MEETINGS_PER_COURSE: int = 10;
 glob MAX_OPEN_TASKS: int = 400;
+glob MAX_TAGS: int = 10;
+glob MAX_TAG_LENGTH: int = 40;
+glob MAX_EVENT_TITLE_LENGTH: int = 200;
+glob MAX_EVENT_LINKS: int = 200;
 glob WEEKDAY_NAMES: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 """A subtask the student confirmed on the Breakdown screen, possibly edited."""
@@ -88,6 +97,9 @@ obj CourseView {
     has id: str;
     has code: str;
     has name: str;
+    has tags: list[str];
+    has color: str;
+    has linked_events: list[str];
     has meetings: list[MeetingView];
     has assignments: list[AssignmentView];
     has open_tasks: int;
@@ -173,6 +185,9 @@ def course_view(course: Course) -> CourseView {
         id=jid(course),
         code=course.code,
         name=course.name,
+        tags=course.tags,
+        color=course.color,
+        linked_events=sorted([link.title for link in event_links() if link.course_id == jid(course)]),
         meetings=[meeting_view(m) for m in meetings_of(course)],
         assignments=assignments,
         open_tasks=len(open_steps),
@@ -181,6 +196,7 @@ def course_view(course: Course) -> CourseView {
 }
 
 def course_list -> list[CourseView] {
+    ensure_colors();
     return [course_view(c) for c in all_courses()];
 }
 
@@ -210,7 +226,7 @@ def:protect add_course(code: str, name: str) -> CourseResult {
     if len(courses) >= MAX_COURSES {
         return failed(f"You can track up to {MAX_COURSES} courses. Remove one first.");
     }
-    root ++> Course(code=clean_code, name=clean_name);
+    root ++> Course(code=clean_code, name=clean_name, color=next_color([c.color for c in courses]));
     return ok_courses();
 }
 
@@ -226,7 +242,81 @@ def:protect remove_course(course_id: str) -> CourseResult {
     for meeting in meetings_of(course) {
         del meeting;
     }
+    for link in event_links() {
+        if link.course_id == course_id {
+            del link;
+        }
+    }
     del course;
+    return ok_courses();
+}
+
+"""The names this course goes by in calendar events, beyond its code and name."""
+def:protect set_course_tags(course_id: str, tags: list[str]) -> CourseResult {
+    course = find_course(course_id);
+    if course is None {
+        return failed("That course no longer exists.");
+    }
+    cleaned = list(dict.fromkeys([single_line(tag) for tag in tags if single_line(tag)]));
+    if len(cleaned) > MAX_TAGS {
+        return failed(f"Keep up to {MAX_TAGS} calendar names per course.");
+    }
+    if [tag for tag in cleaned if len(tag) > MAX_TAG_LENGTH] {
+        return failed(f"Keep each calendar name under {MAX_TAG_LENGTH} characters.");
+    }
+    course.tags = cleaned;
+    return ok_courses();
+}
+
+def:protect set_course_color(course_id: str, color: str) -> CourseResult {
+    course = find_course(course_id);
+    if course is None {
+        return failed("That course no longer exists.");
+    }
+    if not is_course_color(color) {
+        return failed(f"Pick one of: {', '.join(PALETTE)}.");
+    }
+    course.color = color;
+    return ok_courses();
+}
+
+"""Tie every event with this name to a course, or to none with course_id "". Beats automatic matching."""
+def:protect link_event(event_title: str, course_id: str) -> CourseResult {
+    title = single_line(event_title);
+    key = normalize(title);
+    if not key {
+        return failed("That event has no name to link.");
+    }
+    if len(title) > MAX_EVENT_TITLE_LENGTH {
+        return failed(f"Event names over {MAX_EVENT_TITLE_LENGTH} characters can't be linked.");
+    }
+    if course_id and find_course(course_id) is None {
+        return failed("That course no longer exists.");
+    }
+    links = event_links();
+    existing = [link for link in links if link.key == key];
+    if existing {
+        existing[0].title = title;
+        existing[0].course_id = course_id;
+        return ok_courses();
+    }
+    if len(links) >= MAX_EVENT_LINKS {
+        return failed(f"You can link up to {MAX_EVENT_LINKS} event names.");
+    }
+    root ++> EventLink(title=title, key=key, course_id=course_id);
+    return ok_courses();
+}
+
+"""Forget the student's choice for this event name, so automatic matching applies again."""
+def:protect unlink_event(event_title: str) -> CourseResult {
+    key = normalize(event_title);
+    matches = [link for link in event_links() if link.key == key];
+    if not matches {
+        return failed("That event isn't linked.");
+    }
+    for link in matches {
+        del link;
+    }
     return ok_courses();
 }
 

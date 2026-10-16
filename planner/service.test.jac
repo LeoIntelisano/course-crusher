@@ -1,5 +1,7 @@
 import from datetime { datetime, timedelta, timezone }
+import from unittest.mock { patch }
 import from jaclang.testing.testing { JacTestClient }
+import from connectors.google_web_auth { WEB_CLIENT_SECRETS_ENV }
 import from shared.api_testing { call, signed_in_client }
 
 def subtask_draft(title: str, tier: str, minutes: int) -> dict[str, any] {
@@ -39,7 +41,9 @@ test "today plans the saved subtasks" {
     client = seeded_client();
     try {
         ids = task_ids(client);
-        today = call(client, "get_today");
+        with patch.dict("os.environ", {WEB_CLIENT_SECRETS_ENV: ""}) {
+            today = call(client, "get_today");
+        }
 
         assert today["open_tasks"] == 3 and today["course_count"] == 1;
         assert today["display_name"] == "Test Student" and today["initials"] == "TS";

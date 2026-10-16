@@ -2,16 +2,32 @@
 
     root --> Course -MeetsAt-> ClassMeeting
                     -Assigned-> Assignment -Step-> Task
+    root --> EventLink (the student's own course choice for an event name)
 
 Timestamps are ISO 8601 strings with a UTC offset. Lookups by ID only walk the
 caller's own root, so an ID from another account simply isn't found.
 """
 
 import from breakdown { CognitiveTier }
+import from courses.colors { fill_colors }
 
+"""`tags` are extra names the student uses for the course in calendar events, e.g. "ML".
+`color` is a key from `courses.colors.PALETTE`."""
 node Course {
     has code: str;
     has name: str = "";
+    has tags: list[str] = [];
+    has color: str = "";
+}
+
+"""The student's decision for one calendar event name, overriding automatic matching.
+
+`key` is the normalized title; `course_id` is the course, or "" for "not a class".
+"""
+node EventLink {
+    has title: str;
+    has key: str;
+    has course_id: str = "";
 }
 
 """A weekly class meeting. `weekdays` uses Python's numbering: Monday is 0."""
@@ -51,6 +67,25 @@ def all_courses -> list[Course] {
     return sorted(
         [root-->[?:Course]], key=lambda (c: Course) -> str { return c.code.lower(); }
     );
+}
+
+"""Courses in the order they were added, which is the order colors are handed out in."""
+def courses_in_creation_order -> list[Course] {
+    return [root-->[?:Course]];
+}
+
+def event_links -> list[EventLink] {
+    return [root-->[?:EventLink]];
+}
+
+"""Give courses added before colors existed one, in the order they were added."""
+def ensure_colors {
+    courses = courses_in_creation_order();
+    for (course, color) in zip(courses, fill_colors([c.color for c in courses]), strict=True) {
+        if course.color != color {
+            course.color = color;
+        }
+    }
 }
 
 def meetings_of(course: Course) -> list[ClassMeeting] {

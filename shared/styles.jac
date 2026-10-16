@@ -60,3 +60,48 @@ glob BLOCK: dict[str, str] = {
     "shallow": "rounded-sm border border-shallow-line bg-shallow-bg px-[9px] py-1.5 text-[11.5px] leading-[1.3] text-shallow",
     "low": "rounded-sm border border-low-line bg-low-bg px-[9px] py-1.5 text-[11.5px] leading-[1.3] text-low"
 };
+
+# Course colors, keyed by courses.colors.PALETTE.
+glob COURSE_BLOCK: dict[str, str] = {
+    "indigo": "border border-indigo-200 bg-indigo-50 text-indigo-900",
+    "teal": "border border-teal-200 bg-teal-50 text-teal-900",
+    "amber": "border border-amber-200 bg-amber-50 text-amber-900",
+    "rose": "border border-rose-200 bg-rose-50 text-rose-900",
+    "sky": "border border-sky-200 bg-sky-50 text-sky-900",
+    "violet": "border border-violet-200 bg-violet-50 text-violet-900",
+    "emerald": "border border-emerald-200 bg-emerald-50 text-emerald-900",
+    "orange": "border border-orange-200 bg-orange-50 text-orange-900"
+};
+
+glob COURSE_ACCENT: dict[str, str] = {
+    "indigo": "border-l-4 border-l-indigo-500",
+    "teal": "border-l-4 border-l-teal-500",
+    "amber": "border-l-4 border-l-amber-500",
+    "rose": "border-l-4 border-l-rose-500",
+    "sky": "border-l-4 border-l-sky-500",
+    "violet": "border-l-4 border-l-violet-500",
+    "emerald": "border-l-4 border-l-emerald-500",
+    "orange": "border-l-4 border-l-orange-500"
+};
+
+glob COURSE_DOT: dict[str, str] = {
+    "indigo": "inline-block h-2 w-2 flex-none rounded-full bg-indigo-500",
+    "teal": "inline-block h-2 w-2 flex-none rounded-full bg-teal-500",
+    "amber": "inline-block h-2 w-2 flex-none rounded-full bg-amber-500",
+    "rose": "inline-block h-2 w-2 flex-none rounded-full bg-rose-500",
+    "sky": "inline-block h-2 w-2 flex-none rounded-full bg-sky-500",
+    "violet": "inline-block h-2 w-2 flex-none rounded-full bg-violet-500",
+    "emerald": "inline-block h-2 w-2 flex-none rounded-full bg-emerald-500",
+    "orange": "inline-block h-2 w-2 flex-none rounded-full bg-orange-500"
+};
+
+glob COURSE_SWATCH: dict[str, str] = {
+    "indigo": "h-6 w-6 rounded-full bg-indigo-500",
+    "teal": "h-6 w-6 rounded-full bg-teal-500",
+    "amber": "h-6 w-6 rounded-full bg-amber-500",
+    "rose": "h-6 w-6 rounded-full bg-rose-500",
+    "sky": "h-6 w-6 rounded-full bg-sky-500",
+    "violet": "h-6 w-6 rounded-full bg-violet-500",
+    "emerald": "h-6 w-6 rounded-full bg-emerald-500",
+    "orange": "h-6 w-6 rounded-full bg-orange-500"
+};

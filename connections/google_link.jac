@@ -4,12 +4,15 @@ The link lives on the student's root. Its token never leaves the server: views
 report only the connection state, the calendars read, and when they last synced.
 """
 
+import json;
 import logging;
+import time;
 import from datetime { datetime, timedelta, timezone }
 import from google.auth.exceptions { GoogleAuthError, RefreshError }
 import from google.auth.transport.requests { AuthorizedSession }
 import from requests { RequestException }
 import from connectors.google_calendar { CalendarAuthError, CalendarError, fetch_busy_blocks }
+import from connectors.google_events { CalendarEntry, fetch_events, has_event_access }
 import from connectors.google_web_auth {
     finish_consent,
     fresh_credentials,
@@ -17,7 +20,6 @@ import from connectors.google_web_auth {
     start_consent,
     web_auth_configured
 }
-import from scheduling.planner { CalendarEvent }
 
 glob logger: logging.Logger = logging.getLogger("course_crusher.connections");
 glob MAX_CALENDARS: int = 10;
@@ -25,6 +27,14 @@ glob MAX_CALENDAR_ID_LENGTH: int = 200;
 glob CONSENT_TTL: timedelta = timedelta(minutes=10);
 glob SETUP_PROBLEM: str = "Google sign-in isn't set up correctly on this server.";
 glob READ_PROBLEM: str = "Couldn't read Google Calendar. Showing your plan without it.";
+glob CACHE_SECONDS: float = 60.0;
+glob BUSY_TITLE: str = "Busy";
+
+glob DAYS_PER_WEEK: int = 7;
+
+# Recent reads per link and window, so the Today page and the calendar don't each
+# call Google on one page load. In memory only: event names are never stored.
+glob entry_cache: dict[str, tuple[float, list[CalendarEntry]]] = {};
 
 enum LinkState: str {
     NOT_CONFIGURED = "not_configured",
@@ -44,11 +54,13 @@ node GoogleLink {
     has last_error: str = "";
 }
 
+"""`names` is False for links granted before event names were read; they show busy time only."""
 obj CalendarStatus {
     has state: str;
     has detail: str;
     has calendars: list[str];
     has last_synced_at: str = "";
+    has names: bool = False;
 }
 
 obj ConnectStart {
@@ -94,6 +106,42 @@ def clear_pending(link: GoogleLink) {
     link.pending_started_at = "";
 }
 
+def token_scopes(link: GoogleLink) -> list[str] {
+    if not link.token_json {
+        return [];
+    }
+    try {
+        return list(json.loads(link.token_json).get("scopes") or []);
+    } except (ValueError, AttributeError) {
+        return [];
+    }
+}
+
+def reads_names(link: GoogleLink) -> bool {
+    return has_event_access(token_scopes(link));
+}
+
+def forget_cached(link: GoogleLink) {
+    prefix = f"{jid(link)}|";
+    entry_cache = {key: value for (key, value) in entry_cache.items() if not key.startswith(prefix)};
+}
+
+"""Widen a window to whole Monday-to-Monday weeks in its own zone.
+
+Today and the calendar ask for overlapping but different windows; aligned, they
+usually share one read and one cache entry.
+"""
+def aligned_window(window_start: datetime, window_end: datetime) -> tuple[datetime, datetime] {
+    zone = window_start.tzinfo;
+    first = window_start.date() - timedelta(days=window_start.weekday());
+    last = (window_end - timedelta(microseconds=1)).astimezone(zone).date();
+    after = last + timedelta(days=DAYS_PER_WEEK - last.weekday());
+    return (
+        datetime.combine(first, datetime.min.time(), tzinfo=zone),
+        datetime.combine(after, datetime.min.time(), tzinfo=zone)
+    );
+}
+
 def status_of(link: GoogleLink) -> CalendarStatus {
     if not web_auth_configured() {
         return CalendarStatus(
@@ -115,11 +163,13 @@ def status_of(link: GoogleLink) -> CalendarStatus {
             last_synced_at=link.last_synced_at
         );
     }
+    names = reads_names(link);
     return CalendarStatus(
         state=str(LinkState.CONNECTED),
-        detail="Connected",
+        detail="Connected" if names else "Connected for busy times only. Reconnect to show event names.",
         calendars=link.calendar_ids,
-        last_synced_at=link.last_synced_at
+        last_synced_at=link.last_synced_at,
+        names=names
     );
 }
 
@@ -173,6 +223,7 @@ def:protect finish_google_connect(code: str, state: str) -> ConnectResult {
     link.token_json = token;
     link.connected_at = now_text();
     link.last_error = "";
+    forget_cached(link);
     return ConnectResult(ok=True, status=status_of(link));
 }
 
@@ -189,6 +240,7 @@ def:protect disconnect_google -> CalendarStatus {
         }
     }
     link.token_json = "";
+    forget_cached(link);
     clear_pending(link);
     link.last_error = "";
     link.last_synced_at = "";
@@ -205,27 +257,45 @@ def:protect set_google_calendars(calendar_ids: list[str]) -> ConnectResult {
         return connect_failed(link, f"Read at most {MAX_CALENDARS} calendars.");
     }
     link.calendar_ids = list(dict.fromkeys(cleaned));
+    forget_cached(link);
     return ConnectResult(ok=True, status=status_of(link));
 }
 
-"""Google busy time inside the window as calendar events, plus the resulting status.
+"""Read the window from Google: named events when the grant allows it, else busy blocks titled "Busy"."""
+def read_google(link: GoogleLink, window_start: datetime, window_end: datetime) -> list[CalendarEntry] {
+    (credentials, refreshed) = fresh_credentials(link.token_json);
+    if refreshed is not None {
+        link.token_json = refreshed;
+    }
+    session = AuthorizedSession(credentials);
+    if reads_names(link) {
+        return fetch_events(session, link.calendar_ids, window_start, window_end);
+    }
+    return [
+        CalendarEntry(title=BUSY_TITLE, start=b.start, end=b.end)
+        for b in fetch_busy_blocks(session, link.calendar_ids, window_start, window_end)
+    ];
+}
+
+"""The student's Google entries inside the window, plus the resulting status.
 
 A failed read is recorded on the link and surfaced in the status, and the plan
 goes ahead without Google rather than failing the whole page.
 """
-def google_busy_events(window_start: datetime, window_end: datetime) -> tuple[list[CalendarEvent], CalendarStatus] {
+def google_entries(window_start: datetime, window_end: datetime) -> tuple[list[CalendarEntry], CalendarStatus] {
     link = ensure_link();
     if not link.token_json or not web_auth_configured() {
         return ([], status_of(link));
     }
+    (read_start, read_end) = aligned_window(window_start, window_end);
+    cache_key = f"{jid(link)}|{read_start.isoformat()}|{read_end.isoformat()}";
+    now = time.monotonic();
+    cached = entry_cache.get(cache_key);
+    if cached is not None and now - cached[0] < CACHE_SECONDS {
+        return (cached[1], status_of(link));
+    }
     try {
-        (credentials, refreshed) = fresh_credentials(link.token_json);
-        if refreshed is not None {
-            link.token_json = refreshed;
-        }
-        blocks = fetch_busy_blocks(
-            AuthorizedSession(credentials), link.calendar_ids, window_start, window_end
-        );
+        entries = read_google(link, read_start, read_end);
     } except RefreshError as err {
         logger.warning("Google refresh rejected: %s", err);
         link.last_error = "Google access expired. Reconnect Google Calendar.";
@@ -246,9 +316,7 @@ def google_busy_events(window_start: datetime, window_end: datetime) -> tuple[li
     }
     link.last_synced_at = now_text();
     link.last_error = "";
-    events = [
-        CalendarEvent(title="Busy", start=b.start, end=b.end, detail="Google Calendar")
-        for b in blocks
-    ];
-    return (events, status_of(link));
+    fresh = {key: value for (key, value) in entry_cache.items() if now - value[0] < CACHE_SECONDS};
+    entry_cache = {**fresh, cache_key: (now, entries)};
+    return (entries, status_of(link));
 }

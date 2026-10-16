@@ -113,10 +113,16 @@ def:pub ConnectionsPage -> JsxElement {
                 <CardHeader title="Google Calendar" titleId="google-h" aside={STATE_TEXT.get(state, "Checking…")} />
                 <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-[12.5px] text-body">
                     <p className="m-0">
-                        CourseCrusher reads only when you're busy (the free/busy scope), never event titles or details. Busy time is planned around like a class.
+                        CourseCrusher reads your events' names and times (read-only) to plan around them, show them on the Today calendar, and label them with the matching course. Nothing is copied or stored; your calendar is read when you open the app.
                     </p>
                     {if state == "error" and status {
                         <Notice tone="error" message={status.detail} />
+                    }}
+                    {if state == "connected" and status and not status.names {
+                        <div className="flex flex-col gap-2">
+                            <Notice tone="info" message="Connected for busy times only. Reconnect once to show event names and match them to your courses." />
+                            <div><button type="button" className={BUTTON_PRIMARY} disabled={busy} onClick={lambda (e: MouseEvent) { connect(); }}>Reconnect for event names</button></div>
+                        </div>
                     }}
                     {if state == "not_configured" {
                         <p className="m-0 text-muted">
@@ -159,7 +165,7 @@ def:pub ConnectionsPage -> JsxElement {
             <section className={CARD} aria-labelledby="schedule-h">
                 <CardHeader title="Class schedule" titleId="schedule-h" />
                 <p className="m-0 px-4 pt-3 pb-4 text-[12.5px] text-body">
-                    Lectures and labs you add under <Link to="/courses" className="font-semibold text-brand">Courses</Link> are treated as fixed events, with or without Google Calendar.
+                    Lectures and labs you add under <Link to="/courses" className="font-semibold text-brand">Courses</Link> are treated as fixed events, with or without Google Calendar. Each course also lists the calendar names its Google events go by.
                 </p>
             </section>
         </div>

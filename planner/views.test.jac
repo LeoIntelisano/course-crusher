@@ -218,3 +218,21 @@ test "gap_phrase picks the article and the unit" {
     assert gap_phrase(150) == "a 2h 30m gap";
     assert gap_phrase(480) == "an 8h gap";
 }
+
+test "event details name the course unless the title already does" {
+    span = "2:00 – 3:00 PM";
+    office_hours = CalendarEvent(title="ML office hours", start=at(14), end=at(15), detail="BBB 3901", source="google", course_code="EECS 445");
+    lecture = CalendarEvent(title="EECS 445 Lecture", start=at(11), end=at(12), source="google", course_code="EECS 445");
+
+    assert event_detail(office_hours, span) == "2:00 – 3:00 PM · BBB 3901 · EECS 445";
+    assert event_detail(lecture, span) == "2:00 – 3:00 PM";
+}
+
+test "busy-only Google blocks are drawn as busy" {
+    inputs = wireframe_inputs([]);
+    busy = CalendarEvent(title="Busy", start=at(9), end=at(10), source="busy");
+
+    block = event_block(busy, inputs.rules);
+
+    assert (block.kind, block.title) == ("busy", "Busy");
+}

@@ -454,6 +454,29 @@ button{font:inherit;color:inherit;cursor:pointer}
       <section class="panel" id="p-breakdown" hidden>
         <div class="cols">
           <div>
+              <!-- Assignment Input -->
+              <section class="card" style="padding: 20px; margin-bottom: 16px;">
+                <h2>Break Down a New Assignment</h2>
+
+                <label for="assignment-input">
+                  Assignment Description
+                </label>
+
+                <textarea
+                  id="assignment-input"
+                  rows="5"
+                  placeholder="Paste your assignment instructions here..."
+                  style="width: 100%; margin-top: 10px; padding: 12px;
+                        border: 1px solid #cfd4dc; border-radius: 8px;
+                        font: inherit; resize: vertical;"
+                ></textarea>
+
+                <div class="actions">
+                  <button class="btn primary" id="breakdown-btn">
+                    Break Down Assignment
+                  </button>
+                </div>
+              </section>
             <section class="card" aria-labelledby="bd">
               <div class="src">
                 <div class="lbl">Source · Canvas · EECS 445</div>
@@ -573,6 +596,55 @@ button{font:inherit;color:inherit;cursor:pointer}
 </div>
 
 <script>
+  document.getElementById("breakdown-btn").addEventListener("click", () => {
+  const input = document.getElementById("assignment-input").value.trim();
+
+  if (!input) {
+    alert("Please enter an assignment description first.");
+    return;
+  }
+
+  const sourceDescription = document.querySelector("#p-breakdown .src .q");
+  sourceDescription.textContent = input;
+
+  const sourceLabel = document.querySelector("#p-breakdown .src .lbl");
+  sourceLabel.textContent = "Source · Manual Input · Preview";
+
+  const sampleTasks = [
+  { title: "Review assignment requirements", tier: "shallow", minutes: 20 },
+  { title: "Plan the implementation approach", tier: "deep", minutes: 30 },
+  { title: "Complete the main assignment work", tier: "deep", minutes: 90 },
+  { title: "Test and review the work", tier: "shallow", minutes: 30 },
+  { title: "Finalize and submit", tier: "low", minutes: 15 }
+];
+
+const labels = {
+  deep: "Deep Work",
+  shallow: "Shallow Work",
+  low: "Low Energy"
+};
+
+const breakdownCard = document.querySelector("#p-breakdown .card[aria-labelledby='bd']");
+const taskElements = breakdownCard.querySelectorAll(".sub");
+
+sampleTasks.forEach((task, index) => {
+  const element = taskElements[index];
+
+  element.querySelector(".t").textContent = task.title;
+  element.querySelector(".chip:not(.plain)").className = `chip ${task.tier}`;
+  element.querySelector(".chip:not(.plain)").innerHTML =
+    `<span class="cdot"></span>${labels[task.tier]}`;
+  element.querySelector(".chip.plain").textContent = `${task.minutes} min`;
+  element.querySelector(".when").textContent = "Not scheduled";
+  element.querySelector(".box").className = "box";
+  element.querySelector(".box").textContent = "";
+});
+
+const totalMinutes = sampleTasks.reduce((sum, task) => sum + task.minutes, 0);
+document.getElementById("bd").textContent =
+  `Sample breakdown — ${sampleTasks.length} subtasks, ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m total`;
+
+});
   const TITLES = {
     today:"Today", plan:"Plan", breakdown:"Breakdown",
     courses:"Courses", connections:"Connections", settings:"Settings"

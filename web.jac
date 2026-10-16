@@ -1,4 +1,4 @@
-"""CourseCrusher web app entry: the server endpoints. The browser UI comes next.
+"""CourseCrusher web app entry: server endpoints, then the browser UI.
 
     jac run            # serve at http://localhost:8000 (dev mode, hot reload)
     jac test suite.jac # every server-side test (see suite.jac)
@@ -48,4 +48,11 @@ import from planner.service {
     preview_fit,
     reschedule_task,
     skip_task_today
+}
+
+import "./styles/app.css";
+import from shell.AppRoutes { AppRoutes }
+
+def:pub app -> JsxElement {
+    <AppRoutes />
 }

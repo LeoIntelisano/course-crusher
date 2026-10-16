@@ -1,7 +1,18 @@
 """Turn one assignment description into actionable subtasks."""
 
+import json;
+import logging;
+import os;
 import sys;
+import from datetime { datetime, timedelta, timezone }
 import from jaclang.byllm.lib { ByLLMError }
+
+glob logger: logging.Logger = logging.getLogger("course_crusher.breakdown");
+glob MAX_ASSIGNMENT_CHARS: int = 20000;
+glob LLM_FIXTURE_ENV: str = "COURSE_CRUSHER_LLM_FIXTURE";
+glob FIXTURE_REPEATS: int = 1000;
+glob BREAKDOWNS_PER_HOUR: int = 30;
+glob QUOTA_WINDOW: timedelta = timedelta(hours=1);
 
 enum CognitiveTier: str {
     DEEP_WORK = "Deep Work",
@@ -76,15 +87,117 @@ def normalize_subtasks(subtasks: list[Subtask]) -> list[Subtask] {
     ];
 }
 
+"""Reject empty input before calling the model, then validate what it returns."""
+def break_down(assignment_text: str) -> list[Subtask] {
+    if not assignment_text.strip() {
+        raise ValueError("Assignment description cannot be empty.");
+    }
+    return normalize_subtasks(extract_subtasks(assignment_text));
+}
+
 walker BreakdownAssignment {
     has assignment_text: str;
     has reports: list[list[Subtask]] = [];
 
-    can break_down with Root entry {
-        if not self.assignment_text.strip() {
-            raise ValueError("Assignment description cannot be empty.");
-        }
-        report normalize_subtasks(extract_subtasks(self.assignment_text));
+    can break_down_text with Root entry {
+        report break_down(self.assignment_text);
+    }
+}
+
+obj BreakdownResult {
+    has ok: bool;
+    has error: str = "";
+    has subtasks: list[Subtask] = [];
+}
+
+"""Model calls a student made in the current hour. Each call costs money, and signup is open."""
+node BreakdownUsage {
+    has window_start: str = "";
+    has calls: int = 0;
+}
+
+def ensure_usage -> BreakdownUsage {
+    existing = [root-->[?:BreakdownUsage]];
+    if existing {
+        return existing[0];
+    }
+    return root ++> BreakdownUsage();
+}
+
+"""Count one model call. False once the student is over the hourly limit."""
+def consume_quota(usage: BreakdownUsage, now: datetime) -> bool {
+    started = datetime.fromisoformat(usage.window_start) if usage.window_start else None;
+    if started is None or now - started >= QUOTA_WINDOW {
+        usage.window_start = now.isoformat();
+        usage.calls = 0;
+    }
+    if usage.calls >= BREAKDOWNS_PER_HOUR {
+        return False;
+    }
+    usage.calls += 1;
+    return True;
+}
+
+"""The Breakdown screen's call. Model and validation failures come back as a message, not a 500."""
+def:protect break_down_assignment(assignment_text: str) -> BreakdownResult {
+    if len(assignment_text) > MAX_ASSIGNMENT_CHARS {
+        return BreakdownResult(
+            ok=False, error=f"Paste at most {MAX_ASSIGNMENT_CHARS} characters of the assignment."
+        );
+    }
+    if not assignment_text.strip() {
+        return BreakdownResult(ok=False, error="Assignment description cannot be empty.");
+    }
+    if not consume_quota(ensure_usage(), datetime.now(timezone.utc)) {
+        return BreakdownResult(
+            ok=False,
+            error=f"You've run {BREAKDOWNS_PER_HOUR} breakdowns this hour. Try again later."
+        );
+    }
+    return breakdown_result(assignment_text);
+}
+
+"""Run the breakdown and turn validation or model failures into a message."""
+def breakdown_result(assignment_text: str) -> BreakdownResult {
+    try {
+        return BreakdownResult(ok=True, subtasks=break_down(assignment_text));
+    } except ValueError as err {
+        return BreakdownResult(ok=False, error=str(err));
+    } except ByLLMError as err {
+        logger.error("Breakdown model call failed: %s", err);
+        return BreakdownResult(
+            ok=False, error="The AI breakdown isn't available right now. Try again in a minute."
+        );
+    }
+}
+
+"""Answer every breakdown from a JSON fixture instead of a real model.
+
+For end-to-end runs without an API key only. The fixture is a list of
+{"title", "tier", "estimated_duration"} objects.
+"""
+def install_fixture_model(path: str) {
+    import from jaclang.byllm.lib { MockLLM }
+    with open(path, encoding="utf-8") as handle {
+        steps = json.load(handle);
+    }
+    canned = [
+        Subtask(
+            subtask_id=f"subtask-{n}",
+            title=step["title"],
+            tier=CognitiveTier(step["tier"]),
+            estimated_duration=int(step["estimated_duration"]),
+            order=n
+        )
+        for (n, step) in enumerate(steps, start=1)
+    ];
+    setattr(sys.modules[extract_subtasks.__module__], "llm", MockLLM(outputs=[canned] * FIXTURE_REPEATS));
+    logger.warning("%s is set: breakdowns use canned output from %s", LLM_FIXTURE_ENV, path);
+}
+
+with entry {
+    if os.environ.get(LLM_FIXTURE_ENV) {
+        install_fixture_model(os.environ[LLM_FIXTURE_ENV]);
     }
 }
 

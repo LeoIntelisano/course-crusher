@@ -72,9 +72,38 @@ boundary is faked. `fetch_busy_blocks` takes any object with a `requests`-style
 through the same parser the live path uses. Mock credentials would still need a
 fake token endpoint and would test Google's library rather than our code.
 
-**Later, the web app:** when CourseCrusher runs as a Jac server, switch to the
-web-server OAuth flow with the token stored per user server-side. Only
-`load_credentials` changes; `fetch_busy_blocks(session, …)` stays the same.
+**The web app: OAuth web-server flow with PKCE, token stored per student.**
+`connectors/google_web_auth.jac` builds the consent URL and exchanges the code;
+`connections/google_link.jac` holds each student's `GoogleLink` node and the
+endpoints the Connections screen calls. `fetch_busy_blocks(session, …)` is shared
+with the CLI.
+
+1. In Google Cloud Console, create a second OAuth client of type **Web
+   application** and add the callback page as an authorized redirect URI, e.g.
+   `http://localhost:8000/connections/google/callback`.
+2. Point the server at it (both values can live in `.env`):
+
+   ```bash
+   GOOGLE_WEB_CLIENT_SECRETS_FILE="$HOME/.config/course-crusher/client_secret_web.json"
+   GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/connections/google/callback
+   ```
+
+3. **Connect Google Calendar** on the Connections screen. The server stores the
+   OAuth `state` and PKCE verifier on the student's own root, Google redirects back
+   to the callback page, and `finish_google_connect` exchanges the code only if the
+   returned `state` matches what that same student started.
+
+What is stored and what isn't:
+
+- The token JSON keeps `token`, `refresh_token`, `expiry` and `scopes`. The client
+  ID and secret are dropped and re-read from the client file when credentials are
+  rebuilt, so a database copy doesn't also leak the OAuth client.
+- No view returned to the browser includes the token; the status shows only the
+  connection state, the calendar IDs read, and when they last synced.
+- Refreshed tokens are written back. A rejected refresh marks the link
+  "Needs attention" and the plan loads without Google until the student reconnects.
+- A failed read (network, per-calendar `errors`) is reported on the Connections
+  card and Today; the rest of the plan still loads.
 
 ## `TimeSlot` contract
 

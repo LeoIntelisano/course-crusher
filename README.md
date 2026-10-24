@@ -123,7 +123,7 @@ Folders hold a feature's server and client code side by side.
 | `courses/` | Course, ClassMeeting, Assignment and Task nodes and endpoints; event-name matching (`matching`); the Courses and Breakdown screens |
 | `account/` | Profile and protected hours; sign-in, sign-up and Settings screens |
 | `connections/` | Per-student Google link and its endpoints; Connections and OAuth callback screens |
-| `connectors/` | Google Calendar freeBusy client (CLI), events client and the web OAuth flow |
+| `connectors/` | Google Calendar clients and OAuth; offline [Canvas assignment conversion](docs/connectors/canvas-assignments.md) |
 | `shell/` | Routes, layout, sidebar, top bar, tab bar, and the shared planner context |
 | `shared/` | Formatting, time parsing, error messages, Tailwind class strings, small UI pieces |
 | `styles/app.css` | Tailwind v4 with the wireframe's design tokens |

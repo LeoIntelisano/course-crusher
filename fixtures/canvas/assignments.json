@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1001,
+    "course_id": 449,
+    "name": "Implement Linear Regression",
+    "description": "<p>Implement gradient descent.</p><ul><li>Compare three learning rates.</li><li>Submit code and a two-page report.</li></ul>",
+    "due_at": "2026-11-06T23:59:00-05:00",
+    "html_url": "https://canvas.example.edu/courses/449/assignments/1001"
+  },
+  {
+    "id": 1002,
+    "course_id": 449,
+    "name": "Read Chapter 3",
+    "description": "<p>Read Chapter 3 &amp; summarize its main argument.</p>",
+    "due_at": null,
+    "html_url": "https://canvas.example.edu/courses/449/assignments/1002"
+  },
+  {
+    "id": 1003,
+    "course_id": 449,
+    "name": "Homework Details Pending",
+    "description": null,
+    "due_at": null,
+    "html_url": "https://canvas.example.edu/courses/449/assignments/1003"
+  }
+]

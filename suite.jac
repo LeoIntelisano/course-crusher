@@ -10,6 +10,7 @@ treats it as client code. `suite.test.jac` holds the cross-cutting endpoint test
 import from account.store { get_profile }
 import from breakdown { break_down_assignment }
 import from connections.google_link { calendar_status }
+import from connectors.canvas_assignments { convert_assignment }
 import from courses.drafts { DraftRow }
 import from courses.store { list_courses }
 import from planner.grid { item_box }

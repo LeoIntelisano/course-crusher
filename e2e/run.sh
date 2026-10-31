@@ -116,17 +116,17 @@ if [ "${CANVAS_SAMPLES:-0}" = "1" ]; then
   step "Load and review Canvas samples"
   click_button 'Load Canvas samples'
   expect_text 'Sample assignment'
-  browse select '#canvas-sample' '1003' >/dev/null
+  browse eval "(() => { const s = document.querySelector('#canvas-sample'); s.value = '1003'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()" >/dev/null
   expect_text 'This sample has no description'
   click_button 'Break down assignment'
   expect_text 'Paste the assignment description first.'
-  browse select '#canvas-sample' '1001' >/dev/null
+  browse eval "(() => { const s = document.querySelector('#canvas-sample'); s.value = '1001'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()" >/dev/null
   expect_text 'Sample loaded.'
   [ "$(browse eval "document.querySelector('#bd-due').value")" = "2026-11-06T23:59" ] || fail "sample due date"
   [ "$(browse eval "document.querySelector('#assignment-input').value.includes('<p>')")" = "false" ] || fail "raw HTML in preview"
   click_button 'Break down assignment'
   expect_text 'Agent breakdown — 5 subtasks, 3h 20m total'
-  browse select '#canvas-sample' '1002' >/dev/null
+  browse eval "(() => { const s = document.querySelector('#canvas-sample'); s.value = '1002'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()" >/dev/null
   expect_no_text 'Agent breakdown —'
   [ "$(browse eval "document.querySelector('#bd-due').value")" = "" ] || fail "old due date remained"
 fi

@@ -140,7 +140,7 @@ def:pub BreakdownPage -> JsxElement {
                                 />
                                 <button type="button" className={BUTTON + " mt-[7px] whitespace-nowrap"} onClick={lambda (e: MouseEvent) { createCourse(); }}>Add course</button>
                             </div>
-                            <p className={HINT}>Add the course this assignment belongs to. You can add class times later under Courses.</p>
+                            <p className={HINT}>You can preview a breakdown first. Add a course before saving it to your plan.</p>
                         </div>
                     } else {
                         <div className="grid grid-cols-1 gap-4 desk:grid-cols-3">
@@ -177,7 +177,7 @@ def:pub BreakdownPage -> JsxElement {
                         <div id="assignment-error"><Notice tone="error" message={failure} /></div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button type="submit" className={BUTTON_PRIMARY + " min-h-[46px] basis-full desk:basis-auto desk:min-h-0"} disabled={breaking or len(courses) == 0}>
+                        <button type="submit" className={BUTTON_PRIMARY + " min-h-[46px] basis-full desk:basis-auto desk:min-h-0"} disabled={breaking or saving}>
                             {"Breaking down…" if breaking else "Break down assignment"}
                         </button>
                         <span className="hidden text-[11.5px] text-faint desk:inline">⌘/Ctrl + Enter</span>

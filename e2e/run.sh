@@ -112,6 +112,25 @@ sleep 2
 step "Break down an assignment"
 browse navigate "$BASE_URL/breakdown" >/dev/null
 expect_text "Break down a new assignment"
+if [ "${CANVAS_SAMPLES:-0}" = "1" ]; then
+  step "Load and review Canvas samples"
+  click_button 'Load Canvas samples'
+  expect_text 'Sample assignment'
+  browse select '#canvas-sample' '1003' >/dev/null
+  expect_text 'This sample has no description'
+  click_button 'Break down assignment'
+  expect_text 'Paste the assignment description first.'
+  browse select '#canvas-sample' '1001' >/dev/null
+  expect_text 'Sample loaded.'
+  [ "$(browse eval "document.querySelector('#bd-due').value")" = "2026-11-06T23:59" ] || fail "sample due date"
+  [ "$(browse eval "document.querySelector('#assignment-input').value.includes('<p>')")" = "false" ] || fail "raw HTML in preview"
+  click_button 'Break down assignment'
+  expect_text 'Agent breakdown — 5 subtasks, 3h 20m total'
+  browse select '#canvas-sample' '1002' >/dev/null
+  expect_no_text 'Agent breakdown —'
+  [ "$(browse eval "document.querySelector('#bd-due').value")" = "" ] || fail "old due date remained"
+fi
+
 browse fill '#bd-title' 'Project 2' >/dev/null
 set_value '#bd-due' '2030-01-15T23:59'
 browse fill '#assignment-input' 'Project 2: implement logistic regression from scratch. Submit train.py and a short report with a learning-rate ablation.' >/dev/null

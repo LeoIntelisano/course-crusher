@@ -65,7 +65,12 @@ def retier_row(rows: list[DraftRow], index: int, tier: str) -> list[DraftRow] {
 """Typed minutes, clamped to what the server accepts. Blank or junk keeps the old value."""
 def retime_row(rows: list[DraftRow], index: int, text: str) -> list[DraftRow] {
     row = rows[index];
-    cleaned = "".join([ch for ch in text if ch.isdigit()]);
+    cleaned = "";
+    for ch in text {
+        if ch.isdigit() {
+            cleaned += ch;
+        }
+    }
     if not cleaned {
         return rows;
     }

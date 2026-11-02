@@ -4,6 +4,8 @@ Nothing is scheduled until the student presses "Add N to plan".
 """
 
 import from "@jac/runtime" { Link }
+import from ..connectors.canvas_assignments { CanvasAssignmentDraft }
+import from ..connectors.canvas_preview { list_canvas_samples }
 import from .BreakdownCards { ChecksCard, FitCard, SubtaskRow, when_labels }
 import from .drafts { DraftRow, default_title, included_rows, retier_row, retime_row, retitle_row, summary, toggle_row }
 import from .store { CourseResult, CourseView, SubtaskDraft, add_assignment, add_course, list_courses }
@@ -32,6 +34,40 @@ def:pub BreakdownPage -> JsxElement {
     has failure: str = "";
     has notice: str = "";
     has fit_request: int = 0;
+
+    has samples: list[CanvasAssignmentDraft] = [];
+    has loading_samples: bool = False;
+
+    async def loadSamples -> None {
+        loading_samples = True;
+        try {
+            samples = await list_canvas_samples();
+            failure = "";
+        } except Exception as err {
+            failure = error_message(err);
+        }
+        loading_samples = False;
+    }
+
+    def selectSample(value: str) -> None {
+        for sample in samples {
+            if sample.source_assignment_id == value {
+                title = sample.title;
+                description = sample.description;
+                due_at = sample.due_at;
+                rows = [];
+                source = "";
+                preview = None;
+                fit_request = fit_request + 1;
+                editing = False;
+                failure = "";
+                notice = "Sample loaded. Review the course and due date in your profile timezone before breaking it down.";
+                if sample.needs_description {
+                    notice = "This sample has no description. Add instructions before breaking it down.";
+                }
+            }
+        }
+    }
 
     async def loadCourses -> None;
     async def createCourse -> None;
@@ -78,6 +114,19 @@ def:pub BreakdownPage -> JsxElement {
                     onSubmit={lambda (e: FormEvent) { e.preventDefault(); breakDown(); }}
                     noValidate={True}
                 >
+                    <div>
+                        <button type="button" className={BUTTON} disabled={loading_samples or breaking or saving} onClick={lambda (e: MouseEvent) { loadSamples(); }}>
+                            {"Loading samples..." if loading_samples else "Load Canvas samples"}
+                        </button>
+                        <p className={HINT}>Example data only. Choose a sample and review it before breaking it down. Canvas is not connected.</p>
+                        {if samples {
+                            <label className={LABEL} htmlFor="canvas-sample">Sample assignment</label>
+                            <select id="canvas-sample" className={FIELD} value="" disabled={breaking or saving} onChange={lambda (e: ChangeEvent) { selectSample(e.target.value); }}>
+                                <option value="">Choose a sample to load</option>
+                                {for sample in samples { <option key={sample.source_assignment_id} value={sample.source_assignment_id}>{sample.title}</option> }}
+                            </select>
+                        }}
+                    </div>
                     {if len(courses) == 0 {
                         <div>
                             <label className={LABEL} htmlFor="new-course">Course</label>
@@ -91,7 +140,7 @@ def:pub BreakdownPage -> JsxElement {
                                 />
                                 <button type="button" className={BUTTON + " mt-[7px] whitespace-nowrap"} onClick={lambda (e: MouseEvent) { createCourse(); }}>Add course</button>
                             </div>
-                            <p className={HINT}>Add the course this assignment belongs to. You can add class times later under Courses.</p>
+                            <p className={HINT}>You can preview a breakdown first. Add a course before saving it to your plan.</p>
                         </div>
                     } else {
                         <div className="grid grid-cols-1 gap-4 desk:grid-cols-3">
@@ -128,7 +177,7 @@ def:pub BreakdownPage -> JsxElement {
                         <div id="assignment-error"><Notice tone="error" message={failure} /></div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button type="submit" className={BUTTON_PRIMARY + " min-h-[46px] basis-full desk:basis-auto desk:min-h-0"} disabled={breaking or len(courses) == 0}>
+                        <button type="submit" className={BUTTON_PRIMARY + " min-h-[46px] basis-full desk:basis-auto desk:min-h-0"} disabled={breaking or saving}>
                             {"Breaking down…" if breaking else "Break down assignment"}
                         </button>
                         <span className="hidden text-[11.5px] text-faint desk:inline">⌘/Ctrl + Enter</span>
@@ -139,7 +188,7 @@ def:pub BreakdownPage -> JsxElement {
             {if len(rows) > 0 {
                 <section className={CARD} aria-labelledby="bd">
                     <div className="border-b border-line px-3.5 py-3 desk:px-4 desk:py-3.5">
-                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">{f"Source · Pasted · {course_code}"}</div>
+                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">{f"Source · Reviewed · {course_code}"}</div>
                         <p className="mt-2 mb-0 line-clamp-4 border-l-2 border-line-strong pl-[11px] text-[12.5px] leading-[1.55] text-body whitespace-pre-line">{source}</p>
                     </div>
                     <div className="flex items-center gap-2.5 px-4 pt-3">

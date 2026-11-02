@@ -64,3 +64,28 @@ An assignment whose instructions exist only in an attachment needs user input.
 
 This PR does not close #17 or add graph fields, endpoints, automatic scheduling,
 or database writes. Source fields are retained in the draft for later integration.
+
+## Web sample preview
+
+On Breakdown, click **Load Canvas samples**, then choose an assignment.
+The form shows cleaned instructions and a due date in the profile timezone.
+Choose the local course and review/edit the fields before clicking **Break down assignment**.
+Missing descriptions must be filled in. Changing samples clears the old breakdown and fit preview.
+Nothing is stored until **Add to plan**. Samples can be loaded repeatedly and do not provide import deduplication.
+This preview uses invented data and does not connect to Canvas.
+
+For a demo without a model API key:
+
+```bash
+COURSE_CRUSHER_LLM_FIXTURE=e2e/breakdown_fixture.json jac run --port 8012
+```
+
+The model fixture returns canned subtasks, so this tests the UI flow, not model quality.
+With Chrome/Chromium available (or JACBROWSER_CHROME set), run:
+
+```bash
+CANVAS_SAMPLES=1 BASE_URL=http://localhost:8012 bash e2e/run.sh
+```
+
+This checks missing instructions, HTML cleanup, local dates, breakdown, clearing stale output,
+and the existing confirmation-to-Today/Courses flow using a fresh test account.

@@ -38,10 +38,6 @@ impl BreakdownPage.breakDown -> None {
     if breaking {
         return;
     }
-    if not course_id {
-        failure = "Add the course first.";
-        return;
-    }
     if not description.strip() {
         failure = "Paste the assignment description first.";
         return;
@@ -107,6 +103,10 @@ impl BreakdownPage.refreshFit(next_rows: list[DraftRow]) -> None {
 }
 
 impl BreakdownPage.addToPlan -> None {
+    if not course_id {
+        failure = "Add or select a course before adding this assignment to your plan.";
+        return;
+    }
     chosen_rows = included_rows(rows);
     if not chosen_rows {
         failure = "Select at least one subtask to add.";

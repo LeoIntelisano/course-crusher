@@ -1,4 +1,31 @@
-"""Breakdown handlers: courses, the AI call, the live fit preview, and saving."""
+"""Breakdown handlers: the kept draft, courses, the AI call, the live fit preview, and saving."""
+
+impl BreakdownPage.restoreDraft -> None {
+    kept: BreakdownDraft | None = ctx.breakdownDraft;
+    if kept {
+        course_id = kept.course_id;
+        title = kept.title;
+        due_at = kept.due_at;
+        description = kept.description;
+        source = kept.source;
+        rows = kept.rows;
+    }
+    restored = True;
+}
+
+impl BreakdownPage.discardDraft -> None {
+    # A newer request number makes any fit preview still in flight drop its answer.
+    fit_request = fit_request + 1;
+    title = "";
+    due_at = "";
+    description = "";
+    source = "";
+    rows = [];
+    preview = None;
+    editing = False;
+    failure = "";
+    notice = "";
+}
 
 impl BreakdownPage.loadCourses -> None {
     latest: list[CourseView] = [];
@@ -9,9 +36,7 @@ impl BreakdownPage.loadCourses -> None {
         return;
     }
     courses = latest;
-    if latest and not course_id {
-        course_id = latest[0].id;
-    }
+    course_id = course_to_select([c.id for c in latest], course_id);
 }
 
 impl BreakdownPage.createCourse -> None {
@@ -27,6 +52,7 @@ impl BreakdownPage.createCourse -> None {
         matches = [c for c in result.courses if c.code == new_code.strip().upper()];
         course_id = matches[0].id if matches else (result.courses[0].id if result.courses else "");
         new_code = "";
+        adding_course = False;
         failure = "";
         await ctx.refreshToday();
     } else {

@@ -164,7 +164,7 @@ def:pub BreakdownPage -> JsxElement {
         if len(rows) > 0 {
             await refreshFit(rows);
         }
-
+    }
     chosen = [c for c in courses if c.id == course_id];
     course_code = chosen[0].code if chosen else "";
     labels = when_labels(rows, preview);

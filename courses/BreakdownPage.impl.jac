@@ -86,6 +86,7 @@ impl BreakdownPage.breakDown -> None {
     failure = "";
     editing = False;
     from_ai = True;
+    reviewing = False;
     source = description.strip();
     next_rows = [
         DraftRow(title=step.title, tier=str(step.tier), minutes=step.estimated_duration)
@@ -146,7 +147,9 @@ impl BreakdownPage.addToPlan -> None {
     ];
     result: CourseResult | None = None;
     try {
-        result = await add_assignment(course_id, default_title(title, source), source, due_at, drafts);
+        result = await add_assignment(
+            course_id, default_title(title, source), source, due_at, drafts, approved_starts(preview)
+        );
     } except Exception as err {
         failure = error_message(err);
         saving = False;
@@ -158,7 +161,8 @@ impl BreakdownPage.addToPlan -> None {
         return;
     }
     noun = "subtask" if len(chosen_rows) == 1 else "subtasks";
-    notice = f"Added {len(chosen_rows)} {noun} to your plan.";
+    notice = f"Approved. {len(chosen_rows)} {noun} added to your plan at the times you reviewed.";
+    reviewing = False;
     failure = "";
     rows = [];
     preview = None;

@@ -103,6 +103,7 @@ def:protect skip_task_today(task_id: str) -> ActionResult {
     rules = rules_for(ensure_profile());
     tomorrow = local_day(utc_now(), rules.zone) + timedelta(days=1);
     task.not_before = at_local(tomorrow, rules.day_start, rules.zone).isoformat();
+    task.approved_start = "";
     return ActionResult(ok=True);
 }
 
@@ -118,5 +119,6 @@ def:protect reschedule_task(task_id: str) -> ActionResult {
     current = placement_for(plan, task_id);
     after = current.end if current is not None else now + timedelta(hours=RESCHEDULE_FALLBACK_HOURS);
     task.not_before = after.isoformat();
+    task.approved_start = "";
     return ActionResult(ok=True);
 }

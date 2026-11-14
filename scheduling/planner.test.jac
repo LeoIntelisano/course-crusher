@@ -327,3 +327,75 @@ test "invalid rules and tasks are rejected" {
         plan_tasks([task("zero", 0)], [], [], rules(), at(8));
     }
 }
+
+def approved(task_id: str, minutes: int, start: datetime, tier: CognitiveTier = CognitiveTier.SHALLOW_WORK, group_id: str = "", order: int = 1) -> PlanTask {
+    return PlanTask(
+        task_id=task_id, title=f"Task {task_id}", tier=tier, minutes=minutes,
+        group_id=group_id, order=order, fixed_start=start
+    );
+}
+
+test "an approved time is kept even when an earlier gap is free" {
+    plan = plan_tasks([approved("a", 30, at(19))], tuesday_classes(), [], rules(), at(9));
+
+    assert spans(plan)["a"] == (at(19), at(19, 30));
+    assert plan.placements[0].fixed;
+}
+
+test "other work is planned around approved times" {
+    tasks = [approved("a", 60, at(9)), task("b", 30)];
+
+    plan = plan_tasks(tasks, [], [], rules(), at(9));
+
+    assert spans(plan)["b"] == (at(10), at(10, 30));
+    assert not [p for p in plan.placements if p.task_id == "b"][0].fixed;
+}
+
+test "an approved time that has passed falls back to normal placement" {
+    plan = plan_tasks([approved("a", 30, at(9))], [], [], rules(), at(13));
+
+    assert spans(plan)["a"] == (at(13), at(13, 30));
+    assert not plan.placements[0].fixed;
+}
+
+test "a block under way keeps its start and holds the rest of its slot" {
+    tasks = [approved("a", 60, at(13)), task("b", 30)];
+
+    plan = plan_tasks(tasks, [], [], rules(), at(13, 20));
+
+    assert spans(plan)["a"] == (at(13), at(14));
+    assert spans(plan)["b"] == (at(14), at(14, 30));
+}
+
+test "an approved time that now clashes with an event is re-placed" {
+    plan = plan_tasks([approved("a", 30, at(11))], tuesday_classes(), [], rules(), at(8));
+
+    assert spans(plan)["a"] == (at(8), at(8, 30));
+    assert not plan.placements[0].fixed;
+}
+
+test "two approved times can't share a slot" {
+    tasks = [approved("a", 60, at(9)), approved("b", 60, at(9, 30))];
+
+    plan = plan_tasks(tasks, [], [], rules(), at(8));
+
+    assert spans(plan)["a"] == (at(9), at(10));
+    assert spans(plan)["b"] == (at(8), at(9));
+}
+
+test "low energy releases today's approved Deep Work" {
+    tasks = [approved("a", 60, at(15), tier=CognitiveTier.DEEP_WORK)];
+
+    plan = plan_tasks(tasks, [], [], rules(energy=Energy.LOW), at(9));
+
+    assert spans(plan)["a"][0].date() == (TUESDAY + timedelta(days=1));
+    assert not plan.placements[0].fixed;
+}
+
+test "later steps of an assignment wait for an approved earlier step" {
+    tasks = [approved("a", 60, at(15), group_id="p", order=1), task("b", 30, group_id="p", order=2)];
+
+    plan = plan_tasks(tasks, [], [], rules(), at(9));
+
+    assert spans(plan)["b"] == (at(16), at(16, 30));
+}

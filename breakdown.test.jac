@@ -200,9 +200,12 @@ test "the CLI reports model failures with a message" {
     assert "Traceback" not in err;
 }
 
+"""Call the endpoint's core with `model` and a configured key, so failures are the model's own."""
 def run_endpoint(model: MockLLM, text: str) -> BreakdownResult {
-    with patch.object(sys.modules[extract_subtasks.__module__], "llm", model, create=True) {
-        return breakdown_result(text);
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test", "LLM_MODEL": ""}) {
+        with patch.object(sys.modules[extract_subtasks.__module__], "llm", model, create=True) {
+            return breakdown_result(text);
+        }
     }
 }
 
@@ -240,7 +243,7 @@ test "the endpoint hides model failures behind a friendly message" {
     result = run_endpoint(MockLLM(outputs=["not a subtask list"] * 5), assignment("writing_lab_report"));
 
     assert not result.ok;
-    assert result.error == "The AI breakdown isn't available right now. Try again in a minute.";
+    assert result.error == "The AI's answer came back in a shape we couldn't read. Try again.";
     assert "Traceback" not in result.error;
 }
 
@@ -288,4 +291,66 @@ test "the quota resets after an hour" {
 
     assert consume_quota(usage, datetime(2026, 10, 6, 13, 0, 1, tzinfo=timezone.utc));
     assert usage.calls == 1;
+}
+
+obj APIConnectionError(Exception) {}
+obj AuthenticationError(Exception) {}
+
+"""Run the endpoint with the model call raising `failure`, as a provider error would."""
+def endpoint_failing_with(failure: Exception, env: dict[str, str] | None = None) -> BreakdownResult {
+    module = sys.modules[extract_subtasks.__module__];
+    configured = env if env is not None else {"OPENAI_API_KEY": "sk-test", "LLM_MODEL": ""};
+    with patch.dict("os.environ", configured) {
+        with patch.object(module, "extract_subtasks", side_effect=failure) {
+            return breakdown_result("Write the lab report");
+        }
+    }
+}
+
+obj InternalServerError(Exception) {}
+
+test "a missing key is named instead of a generic provider error" {
+    env = {"OPENAI_API_KEY": "", "LLM_MODEL": "", LLM_FIXTURE_ENV: ""};
+
+    result = endpoint_failing_with(InternalServerError("Missing credentials"), env);
+
+    assert not result.ok;
+    assert "OPENAI_API_KEY is missing" in result.error;
+}
+
+test "provider errors byLLM doesn't map come back as a message, not a 500" {
+    result = endpoint_failing_with(APIConnectionError("connection refused"));
+
+    assert not result.ok;
+    assert result.error == "The server couldn't reach the AI provider. Check its internet connection.";
+}
+
+test "a rejected key says to check the key" {
+    result = endpoint_failing_with(AuthenticationError("invalid x-api-key"));
+
+    assert not result.ok and "API key" in result.error;
+    assert "invalid x-api-key" not in result.error;
+}
+
+test "an unknown failure offers the by-hand fallback" {
+    result = endpoint_failing_with(RuntimeError("provider 503"));
+
+    assert not result.ok and result.error == BREAKDOWN_UNAVAILABLE;
+}
+
+test "ai_status reports a missing key without calling the model" {
+    env = {"OPENAI_API_KEY": "", "LLM_MODEL": "", LLM_FIXTURE_ENV: ""};
+    with patch.dict("os.environ", env) {
+        status = ai_status();
+    }
+
+    assert not status.ready and "OPENAI_API_KEY" in status.message;
+}
+
+test "ai_status is ready in fixture mode" {
+    with patch.dict("os.environ", {LLM_FIXTURE_ENV: "e2e/breakdown_fixture.json"}) {
+        status = ai_status();
+    }
+
+    assert status.ready;
 }

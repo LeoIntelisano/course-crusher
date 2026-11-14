@@ -11,6 +11,7 @@ import from .BreakdownCards { ChecksCard, FitCard, SubtaskRow, when_labels }
 import from .drafts {
     BreakdownDraft,
     DraftRow,
+    add_blank_row,
     course_to_select,
     default_title,
     included_rows,
@@ -22,7 +23,8 @@ import from .drafts {
     toggle_row
 }
 import from .store { CourseResult, CourseView, SubtaskDraft, add_assignment, add_course, list_courses }
-import from ..breakdown { BreakdownResult, Subtask, break_down_assignment }
+import from ..breakdown { BreakdownResult, Subtask, ai_status, break_down_assignment }
+import from ..shared.ai { AiStatus }
 import from ..planner.fit { FitPreview }
 import from ..planner.service { FitResult, preview_fit }
 import from ..shell.PlannerContext { usePlanner }
@@ -52,6 +54,8 @@ def:pub BreakdownPage -> JsxElement {
     has notice: str = "";
     has fit_request: int = 0;
 
+    has ai: AiStatus | None = None;
+    has from_ai: bool = False;
     has samples: list[CanvasAssignmentDraft] = [];
     has loading_samples: bool = False;
 
@@ -84,6 +88,26 @@ def:pub BreakdownPage -> JsxElement {
                 }
             }
         }
+    }
+
+    async def loadAiStatus -> None {
+        try {
+            ai = await ai_status();
+        } except Exception {
+            # The status is advisory; a real breakdown attempt still reports its own error.
+            ai = None;
+        }
+    }
+
+    def addByHand -> None {
+        if len(rows) == 0 {
+            source = description.strip();
+            preview = None;
+            from_ai = False;
+        }
+        rows = add_blank_row(rows);
+        editing = True;
+        failure = "";
     }
 
     def currentDraft -> BreakdownDraft {
@@ -136,11 +160,11 @@ def:pub BreakdownPage -> JsxElement {
     async can with entry {
         restoreDraft();
         await loadCourses();
+        await loadAiStatus();
         if len(rows) > 0 {
             await refreshFit(rows);
         }
     }
-
     chosen = [c for c in courses if c.id == course_id];
     course_code = chosen[0].code if chosen else "";
     labels = when_labels(rows, preview);
@@ -151,6 +175,9 @@ def:pub BreakdownPage -> JsxElement {
     <div className={COLUMNS}>
         <div className={CARD_STACK}>
             <Notice tone="success" message={notice} />
+            {if ai is not None and not ai.ready {
+                <Notice tone="info" message={ai.message + " You can still add subtasks by hand."} />
+            }}
             <section className={CARD} aria-labelledby="compose-h">
                 <CardHeader title="Break down a new assignment" titleId="compose-h" aside="AI" />
                 <form
@@ -237,6 +264,9 @@ def:pub BreakdownPage -> JsxElement {
                         <button type="submit" className={BUTTON_PRIMARY + " min-h-[46px] basis-full desk:basis-auto desk:min-h-0"} disabled={breaking or saving}>
                             {"Breaking down…" if breaking else "Break down assignment"}
                         </button>
+                        <button type="button" className={BUTTON + " basis-full desk:basis-auto"} disabled={breaking or saving} onClick={lambda (e: MouseEvent) { addByHand(); }}>
+                            Add subtasks by hand
+                        </button>
                         <span className="hidden text-[11.5px] text-faint desk:inline">⌘/Ctrl + Enter</span>
                         {if not blank {
                             <button type="button" className={BUTTON_GHOST + " desk:ml-auto"} disabled={breaking or saving} onClick={lambda (e: MouseEvent) { discardDraft(); }}>Discard draft</button>
@@ -247,12 +277,14 @@ def:pub BreakdownPage -> JsxElement {
 
             {if len(rows) > 0 {
                 <section className={CARD} aria-labelledby="bd">
-                    <div className="border-b border-line px-3.5 py-3 desk:px-4 desk:py-3.5">
-                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">{"Source · Reviewed" + (f" · {course_code}" if course_code else "")}</div>
+                    {source and <div className="border-b border-line px-3.5 py-3 desk:px-4 desk:py-3.5">
+                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">
+                            {"Source · Reviewed" + (f" · {course_code}" if course_code else "")}
+                        </div>
                         <p className="mt-2 mb-0 line-clamp-4 border-l-2 border-line-strong pl-[11px] text-[12.5px] leading-[1.55] text-body whitespace-pre-line">{source}</p>
-                    </div>
+                    </div>}
                     <div className="flex items-center gap-2.5 px-4 pt-3">
-                        <h2 id="bd" className="m-0 text-[13.5px] font-[650] tracking-[-0.1px] desk:text-[13px]" aria-live="polite">{"Agent breakdown — " + summary(rows)}</h2>
+                        <h2 id="bd" className="m-0 text-[13.5px] font-[650] tracking-[-0.1px] desk:text-[13px]" aria-live="polite">{("Agent breakdown — " if from_ai else "Your breakdown — ") + summary(rows)}</h2>
                     </div>
                     <div className="divide-y divide-line" aria-busy={"true" if breaking else "false"}>
                         {for (index, row) in enumerate(rows) {
@@ -277,6 +309,7 @@ def:pub BreakdownPage -> JsxElement {
                             {"Adding…" if saving else f"Add {adding} to plan"}
                         </button>
                         <button type="button" className={BUTTON} onClick={finishEditing}>{"Done editing" if editing else "Edit subtasks"}</button>
+                        {editing and <button type="button" className={BUTTON} onClick={lambda (e: MouseEvent) { addByHand(); }}>Add subtask</button>}
                     </div>
                 </section>
             }}

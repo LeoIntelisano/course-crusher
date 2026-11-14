@@ -15,6 +15,7 @@ import from courses.drafts { DraftRow }
 import from courses.store { list_courses }
 import from planner.grid { item_box }
 import from planner.service { get_today }
+import from shared.ai { failure_message }
 import from shared.errors { error_message }
 import from shared.format { format_minutes }
 import from shell.nav { title_for }

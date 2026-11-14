@@ -399,3 +399,58 @@ test "later steps of an assignment wait for an approved earlier step" {
 
     assert spans(plan)["b"] == (at(16), at(16, 30));
 }
+
+def deep(task_id: str, minutes: int, due: datetime | None = None) -> PlanTask {
+    return task(task_id, minutes, CognitiveTier.DEEP_WORK, due=due);
+}
+
+test "each energy level sets today's Deep Work budget" {
+    assert deep_work_budget(Energy.HIGH) is None;
+    assert deep_work_budget(Energy.MEDIUM) == MEDIUM_DEEP_WORK_MINUTES;
+    assert deep_work_budget(Energy.LOW) == 0;
+}
+
+test "high energy places all of today's Deep Work" {
+    plan = plan_tasks([deep("a", 60), deep("b", 60), deep("c", 60)], [], [], rules(), at(9));
+
+    assert all([p.start.date() == TUESDAY for p in plan.placements]);
+}
+
+test "medium energy caps today's Deep Work and moves the rest to tomorrow" {
+    plan = plan_tasks([deep("a", 60), deep("b", 60), task("s", 30)], [], [], rules(energy=Energy.MEDIUM), at(9));
+
+    assert spans(plan)["a"] == (at(9), at(10));
+    assert spans(plan)["b"][0].date() == TUESDAY + timedelta(days=1);
+    assert spans(plan)["s"] == (at(10), at(10, 30));
+}
+
+test "medium energy still fits Deep Work that adds up to the cap" {
+    plan = plan_tasks([deep("a", 45), deep("b", 45)], [], [], rules(energy=Energy.MEDIUM), at(9));
+
+    assert [s[0].date() for s in spans(plan).values()] == [TUESDAY, TUESDAY];
+}
+
+test "Deep Work due today ignores the cap and doesn't use it up" {
+    due_tonight = at(23, 0);
+    tasks = [deep("urgent", 120, due=due_tonight), deep("a", 90)];
+
+    plan = plan_tasks(tasks, [], [], rules(energy=Energy.MEDIUM), at(9));
+
+    assert spans(plan)["urgent"] == (at(9), at(11));
+    assert spans(plan)["a"] == (at(11), at(12, 30));
+}
+
+test "approved Deep Work counts against the cap" {
+    tasks = [approved("kept", 60, at(15), tier=CognitiveTier.DEEP_WORK), approved("over", 60, at(17), tier=CognitiveTier.DEEP_WORK)];
+
+    plan = plan_tasks(tasks, [], [], rules(energy=Energy.MEDIUM), at(9));
+
+    assert spans(plan)["kept"] == (at(15), at(16));
+    assert spans(plan)["over"][0].date() == TUESDAY + timedelta(days=1);
+}
+
+test "the cap only applies to today" {
+    plan = plan_tasks([deep("a", 60), deep("b", 60), deep("c", 60)], [], [], rules(energy=Energy.MEDIUM), at(21, 30));
+
+    assert sorted([s[0] for s in spans(plan).values()]) == [at(8, 0, 1), at(9, 0, 1), at(10, 0, 1)];
+}

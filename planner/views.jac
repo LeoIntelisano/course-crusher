@@ -49,6 +49,7 @@ obj PlanItem {
     has days_left: int = -1;
     has late: bool = False;
     has course_color: str = "";
+    has approved: bool = False;
 }
 
 obj UpNext {
@@ -137,7 +138,8 @@ def plan_item(info: TaskInfo, placement: Placement, rules: PlanRules, today: dat
         due_label=due_label(info.due.astimezone(rules.zone), today) if info.due is not None else "",
         days_left=days_left(info.due, rules, today),
         late=info.task_id in late,
-        course_color=(colors or {}).get(info.course_code, "")
+        course_color=(colors or {}).get(info.course_code, ""),
+        approved=placement.fixed
     );
 }
 

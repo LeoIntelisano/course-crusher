@@ -1,12 +1,13 @@
-"""Breakdown: paste an assignment, review the agent's subtasks, see where they fit, add them to the plan.
+"""Breakdown: paste an assignment, review the agent's subtasks, see where they fit, approve the times.
 
-Nothing is scheduled until the student presses "Add N to plan".
+Nothing is scheduled until the student reviews the proposed slots and presses
+"Approve schedule"; the approved times are saved with each subtask.
 """
 
 import from "@jac/runtime" { Link }
 import from ..connectors.canvas_assignments { CanvasAssignmentDraft }
 import from ..connectors.canvas_preview { list_canvas_samples }
-import from .BreakdownCards { ChecksCard, FitCard, SubtaskRow, when_labels }
+import from .BreakdownCards { ChecksCard, FitCard, ScheduleReview, SubtaskRow, approved_starts, when_labels }
 import from .drafts { DraftRow, default_title, included_rows, retier_row, retime_row, retitle_row, summary, toggle_row }
 import from .store { CourseResult, CourseView, SubtaskDraft, add_assignment, add_course, list_courses }
 import from ..breakdown { BreakdownResult, Subtask, break_down_assignment }
@@ -28,6 +29,7 @@ def:pub BreakdownPage -> JsxElement {
     has rows: list[DraftRow] = [];
     has source: str = "";
     has editing: bool = False;
+    has reviewing: bool = False;
     has preview: FitPreview | None = None;
     has breaking: bool = False;
     has saving: bool = False;
@@ -75,7 +77,18 @@ def:pub BreakdownPage -> JsxElement {
     async def refreshFit(next_rows: list[DraftRow]) -> None;
     async def addToPlan -> None;
 
+    async def startReview -> None {
+        editing = False;
+        await refreshFit(rows);
+        if preview is not None {
+            reviewing = True;
+        }
+    }
+
     def toggle(index: int) {
+        if reviewing {
+            return;
+        }
         next_rows = toggle_row(rows, index);
         rows = next_rows;
         refreshFit(next_rows);
@@ -209,14 +222,22 @@ def:pub BreakdownPage -> JsxElement {
                             />
                         }}
                     </div>
+                    {reviewing and preview is not None and <ScheduleReview preview={preview} />}
                     <div className="flex flex-wrap items-center gap-2.5 rounded-b-lg border-t border-line bg-canvas px-4 py-[13px]">
                         <p className="order-first mb-1 basis-full text-[11.5px] text-muted desk:order-last desk:mb-0 desk:ml-auto desk:basis-auto desk:text-right">
-                            Nothing is scheduled until you confirm.<br />Every slot stays editable.
+                            Nothing is scheduled until you approve the times.
                         </p>
-                        <button type="button" className={BUTTON_PRIMARY} disabled={saving or adding == 0} onClick={lambda (e: MouseEvent) { addToPlan(); }}>
-                            {"Adding…" if saving else f"Add {adding} to plan"}
-                        </button>
-                        <button type="button" className={BUTTON} onClick={finishEditing}>{"Done editing" if editing else "Edit subtasks"}</button>
+                        {if reviewing {
+                            <button key="approve" type="button" className={BUTTON_PRIMARY} disabled={saving} onClick={lambda (e: MouseEvent) { addToPlan(); }}>
+                                {"Saving…" if saving else f"Approve schedule ({adding})"}
+                            </button>
+                            <button key="back" type="button" className={BUTTON} disabled={saving} onClick={lambda (e: MouseEvent) { reviewing = False; }}>Back to edit</button>
+                        } else {
+                            <button key="review" type="button" className={BUTTON_PRIMARY} disabled={saving or adding == 0} onClick={lambda (e: MouseEvent) { startReview(); }}>
+                                {f"Review schedule for {adding}"}
+                            </button>
+                            <button key="edit" type="button" className={BUTTON} onClick={finishEditing}>{"Done editing" if editing else "Edit subtasks"}</button>
+                        }}
                     </div>
                 </section>
             }}

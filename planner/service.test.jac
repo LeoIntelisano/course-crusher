@@ -169,3 +169,67 @@ test "class meetings show up in the week as fixed events" {
         client.close();
     }
 }
+
+"""Add a one-step assignment approved for tomorrow at 15:00 UTC, and return that time and the task id."""
+def add_approved(client: JacTestClient) -> tuple[datetime, str] {
+    course = call(client, "list_courses")[0];
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=15, minute=0, second=0, microsecond=0);
+    saved = call(client, "add_assignment", {
+        "course_id": course["id"],
+        "title": "Lab report",
+        "description": "",
+        "due_at": "",
+        "subtasks": [subtask_draft("Outline the report", "Shallow Work", 30)],
+        "approved_starts": [tomorrow.isoformat()]
+    });
+    assert saved["ok"], saved["error"];
+    lab = [a for a in saved["courses"][0]["assignments"] if a["title"] == "Lab report"][0];
+    return (tomorrow, lab["tasks"][0]["id"]);
+}
+
+test "an approved time from Breakdown stays on the plan" {
+    client = seeded_client();
+    try {
+        (approved_at, task_id) = add_approved(client);
+
+        item = [i for i in week_items(client) if i["task_id"] == task_id][0];
+
+        assert datetime.fromisoformat(item["start"]) == approved_at;
+        assert item["approved"];
+        assert not [i for i in week_items(client) if i["task_id"] != task_id and i["approved"]];
+    } finally {
+        client.close();
+    }
+}
+
+test "reschedule and not today release the approved time" {
+    client = seeded_client();
+    try {
+        (approved_at, task_id) = add_approved(client);
+
+        assert call(client, "reschedule_task", {"task_id": task_id})["ok"];
+        item = [i for i in week_items(client) if i["task_id"] == task_id][0];
+
+        assert not item["approved"];
+        assert datetime.fromisoformat(item["start"]) >= approved_at + timedelta(minutes=30);
+        (_, other_id) = add_approved(client);
+        assert call(client, "skip_task_today", {"task_id": other_id})["ok"];
+        assert not [i for i in week_items(client) if i["task_id"] == other_id][0]["approved"];
+    } finally {
+        client.close();
+    }
+}
+
+test "preview blocks carry the start the student would approve" {
+    client = seeded_client();
+    try {
+        result = call(client, "preview_fit", {
+            "title": "Lab", "due_at": "", "subtasks": [subtask_draft("Outline", "Shallow Work", 30)]
+        });
+
+        block = result["preview"]["blocks"][0];
+        assert block["placed"] and datetime.fromisoformat(block["start"]).tzinfo is not None;
+    } finally {
+        client.close();
+    }
+}

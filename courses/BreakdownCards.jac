@@ -144,3 +144,41 @@ def:pub when_labels(rows: list[DraftRow], preview: FitPreview | None) -> list[st
     }
     return labels;
 }
+
+"""The approval step: every proposed slot, spelled out, before anything lands on the plan."""
+def:pub ScheduleReview(preview: FitPreview) -> JsxElement {
+    problems = [check for check in preview.checks if check.level != "ok"];
+    unplaced = len([block for block in preview.blocks if not block.placed]);
+    <div className="border-t border-line bg-canvas px-4 py-3.5" data-testid="schedule-review">
+        <h3 id="review-h" className="m-0 text-[13px] font-[650] tracking-[-0.1px]">Approve this schedule?</h3>
+        <p className="mt-1 mb-0 text-[12px] text-muted">
+            These times go on your plan only when you approve them. Approved times stay put while they're free; Reschedule or Not today on Today moves one.
+        </p>
+        <ol className="m-0 mt-2.5 flex list-none flex-col gap-1.5 p-0" aria-labelledby="review-h">
+            {for block in preview.blocks {
+                <li key={f"{block.position}"} className="rounded-sm border border-line bg-surface px-3 py-2">
+                    <div className="text-[12.5px] font-semibold">{block.title}</div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className={"mr-1 text-[12px] font-semibold tabular-nums " + ("text-brand" if block.placed else "text-danger")}>{block.when_label}</span>
+                        <TierChip tier={block.tier} />
+                        <PlainChip text={f"{block.minutes} min"} />
+                    </div>
+                </li>
+            }}
+        </ol>
+        {unplaced > 0 and <p className="mt-2 mb-0 text-[12px] font-semibold text-danger">
+            {f"{unplaced} {'subtask has' if unplaced == 1 else 'subtasks have'} no slot this week. Approving still adds {'it' if unplaced == 1 else 'them'}, and the planner places {'it' if unplaced == 1 else 'them'} when time opens up."}
+        </p>}
+        {for check in problems {
+            <p key={check.message} className="mt-1.5 mb-0 text-[12px] font-semibold text-danger">{"! " + check.message}</p>
+        }}
+    </div>
+}
+
+"""The start the student approves for each proposed block, by position ("" when it has no slot)."""
+def:pub approved_starts(preview: FitPreview | None) -> list[str] {
+    if preview is None {
+        return [];
+    }
+    return [block.start if block.placed else "" for block in preview.blocks];
+}

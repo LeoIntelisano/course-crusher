@@ -80,6 +80,7 @@ obj TaskView {
     has estimated_duration: int;
     has order: int;
     has done: bool;
+    has approved_start: str = "";
 }
 
 obj AssignmentView {
@@ -154,7 +155,8 @@ def task_view(task: Task) -> TaskView {
         tier=str(task.tier),
         estimated_duration=task.estimated_duration,
         order=task.order,
-        done=task.done
+        done=task.done,
+        approved_start=task.approved_start
     );
 }
 
@@ -387,9 +389,30 @@ def clean_drafts(subtasks: list[SubtaskDraft]) -> list[SubtaskDraft] {
     return cleaned;
 }
 
-"""Save an assignment and the subtasks the student confirmed. Nothing is scheduled until this runs."""
+"""The approved start for each subtask, by position: a stored ISO time, or "" for none."""
+def clean_starts(starts: list[str], count: int) -> list[str] {
+    cleaned: list[str] = [];
+    for position in range(count) {
+        text = starts[position].strip() if position < len(starts) else "";
+        moment = stored_moment(text);
+        cleaned = cleaned + [moment.isoformat() if moment is not None else ""];
+    }
+    return cleaned;
+}
+
+"""Save an assignment and the subtasks the student confirmed. Nothing is scheduled until this runs.
+
+`approved_starts` holds, by position, the time the student approved for each
+subtask on the Breakdown review ("" when it had no slot). The planner keeps
+those times while they still fit.
+"""
 def:protect add_assignment(
-    course_id: str, title: str, description: str, due_at: str, subtasks: list[SubtaskDraft]
+    course_id: str,
+    title: str,
+    description: str,
+    due_at: str,
+    subtasks: list[SubtaskDraft],
+    approved_starts: list[str] = []
 ) -> CourseResult {
     course = find_course(course_id);
     if course is None {
@@ -406,6 +429,7 @@ def:protect add_assignment(
     } except ValueError as err {
         return failed(str(err));
     }
+    starts = clean_starts(approved_starts, len(drafts));
     if open_task_count() + len(drafts) > MAX_OPEN_TASKS {
         return failed(f"Your plan is capped at {MAX_OPEN_TASKS} open subtasks. Finish or remove some first.");
     }
@@ -420,7 +444,8 @@ def:protect add_assignment(
             title=draft.title,
             tier=CognitiveTier(draft.tier),
             estimated_duration=draft.estimated_duration,
-            order=position
+            order=position,
+            approved_start=starts[position - 1]
         );
     }
     return ok_courses();

@@ -174,7 +174,8 @@ def plan_task(assignment: Assignment, task: Task) -> PlanTask {
         group_id=jid(assignment),
         order=task.order,
         due=stored_moment(assignment.due_at),
-        not_before=stored_moment(task.not_before)
+        not_before=stored_moment(task.not_before),
+        fixed_start=stored_moment(task.approved_start)
     );
 }
 

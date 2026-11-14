@@ -16,6 +16,10 @@ Rules, in the order they are applied:
 4. Deep Work must end by `deep_work_cutoff`, so it stays off late nights.
 5. With energy set to Low, today's Deep Work moves to a later day unless it is
    due today or overdue.
+6. A task with an approved time (`fixed_start`) is placed there first and keeps
+   it while that time is still free, not over, and allowed by rules 4 and 5. A
+   block already under way keeps its start. Otherwise the task is placed like
+   any other.
 """
 
 import from datetime { date, datetime, time, timedelta, timezone, tzinfo }
@@ -49,6 +53,7 @@ obj PlanTask {
     has order: int = 1;
     has due: datetime | None = None;
     has not_before: datetime | None = None;
+    has fixed_start: datetime | None = None;
 }
 
 """A fixed calendar commitment: a class time, a named Google event, or an anonymous busy block.
@@ -82,10 +87,12 @@ obj PlanRules {
     has energy: Energy = Energy.HIGH;
 }
 
+"""Where a task landed. `fixed` means it kept the time the student approved."""
 obj Placement {
     has task_id: str;
     has start: datetime;
     has end: datetime;
+    has fixed: bool = False;
 }
 
 """Where every task landed. `unplaced` found no gap in the horizon; `late` ends after its due time."""
@@ -240,6 +247,63 @@ def consume(gaps: list[TimeSlot], index: int, start: datetime, end: datetime) ->
     return gaps[:index] + remnants + gaps[index + 1:];
 }
 
+"""The gap holding [start, end) whole, or -1."""
+def gap_holding(gaps: list[TimeSlot], start: datetime, end: datetime) -> int {
+    for (index, gap) in enumerate(gaps) {
+        if gap.start_time <= start and end <= gap.end_time {
+            return index;
+        }
+    }
+    return -1;
+}
+
+"""Whether an approved time still stands: not over, not before `not_before`, and allowed today."""
+def fixed_time_allowed(task: PlanTask, start: datetime, end: datetime, rules: PlanRules, now: datetime, today: date) -> bool {
+    if end <= now or (task.not_before is not None and start < task.not_before) {
+        return False;
+    }
+    day = local_day(start, rules.zone);
+    if not deep_work_allowed(task, day, rules, today) {
+        return False;
+    }
+    return not (task.tier == CognitiveTier.DEEP_WORK and end > at_local(day, rules.deep_work_cutoff, rules.zone));
+}
+
+"""Tasks with an approved time, earliest first."""
+def approved_times(tasks: list[PlanTask]) -> list[tuple[datetime, PlanTask]] {
+    pinned: list[tuple[datetime, PlanTask]] = [];
+    for task in tasks {
+        start = task.fixed_start;
+        if start is not None {
+            pinned = pinned + [(start, task)];
+        }
+    }
+    return sorted(pinned, key=lambda (pair: tuple[datetime, PlanTask]) -> datetime { return pair[0]; });
+}
+
+"""Rule 6: keep each approved time that still stands, consuming its slot from the gaps."""
+def place_fixed(
+    tasks: list[PlanTask], gaps: list[TimeSlot], rules: PlanRules, now: datetime, today: date
+) -> tuple[list[Placement], list[TimeSlot]] {
+    placements: list[Placement] = [];
+    earliest = round_up(now.astimezone(rules.zone));
+    for (start, task) in approved_times(tasks) {
+        end = start + timedelta(minutes=task.minutes);
+        if not fixed_time_allowed(task, start, end, rules, now, today) {
+            continue;
+        }
+        # A block already under way only needs what's left of it to be free.
+        held_from = max(start, earliest);
+        index = gap_holding(gaps, held_from, end) if held_from < end else -1;
+        if index < 0 {
+            continue;
+        }
+        placements = placements + [Placement(task_id=task.task_id, start=start, end=end, fixed=True)];
+        gaps = consume(gaps, index, held_from, end);
+    }
+    return (placements, gaps);
+}
+
 def earliest_start(task: PlanTask, now: datetime, ready: dict[str, datetime]) -> datetime {
     candidates = [now] + [moment for moment in [task.not_before, ready.get(task.group_id)] if moment is not None];
     return max(candidates);
@@ -256,13 +320,20 @@ def plan_tasks(
     for task in tasks {
         validate_task(task);
     }
-    gaps = free_gaps(events, protected, rules, now);
     today = local_day(now, rules.zone);
-    placements: list[Placement] = [];
+    (placements, gaps) = place_fixed(tasks, free_gaps(events, protected, rules, now), rules, now, today);
+    kept = {p.task_id: p for p in placements};
     unplaced: list[str] = [];
     ready: dict[str, datetime] = {};
     blocked: set[str] = set();
     for task in sorted(tasks, key=sort_key) {
+        if task.task_id in kept {
+            end = kept[task.task_id].end;
+            if task.group_id {
+                ready = {**ready, task.group_id: max(end, ready.get(task.group_id, end))};
+            }
+            continue;
+        }
         if task.group_id and task.group_id in blocked {
             unplaced = unplaced + [task.task_id];
             continue;

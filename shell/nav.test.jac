@@ -13,6 +13,7 @@ test "titles follow the current screen" {
     assert title_for("/breakdown") == "Breakdown";
     assert title_for("/connections/google/callback") == "Connections";
     assert title_for("/nowhere") == "CourseCrusher";
+    assert title_for("/welcome") == "How it works";
 }
 
 test "the tab bar holds the four primary screens" {

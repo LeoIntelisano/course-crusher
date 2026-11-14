@@ -28,6 +28,9 @@ def is_current(item_path: str, path: str) -> bool {
 }
 
 def title_for(path: str) -> str {
+    if path == "/welcome" {
+        return "How it works";
+    }
     for item in PRIMARY_NAV + WORKSPACE_NAV {
         if is_current(item.path, path) {
             return item.label;

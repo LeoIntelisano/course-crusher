@@ -1,6 +1,6 @@
 """Settings: the day's bounds, Deep Work cutoff, buffers, protected hours, and sign out."""
 
-import from "@jac/runtime" { jacLogout, useNavigate }
+import from "@jac/runtime" { Link, jacLogout, useNavigate }
 import from .store {
     ProfileResult,
     ProfileView,
@@ -145,7 +145,8 @@ def:pub SettingsPage -> JsxElement {
             </section>
             <section className={CARD} aria-labelledby="account-h">
                 <CardHeader title="Account" titleId="account-h" />
-                <div className="px-4 pt-3 pb-4">
+                <div className="flex flex-wrap items-center gap-2.5 px-4 pt-3 pb-4">
+                    <Link to="/welcome" className={BUTTON + " no-underline"}>How CourseCrusher works</Link>
                     <button type="button" className={BUTTON} onClick={signOut}>Sign out</button>
                 </div>
             </section>

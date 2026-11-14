@@ -7,6 +7,8 @@ import from shared.format { format_minutes }
 
 glob TITLE_FALLBACK_LENGTH: int = 60;
 glob MAX_DRAFT_MINUTES: int = 480;
+glob BLANK_ROW_TIER: str = "Shallow Work";
+glob BLANK_ROW_MINUTES: int = 30;
 
 obj DraftRow {
     has title: str;
@@ -76,4 +78,9 @@ def retime_row(rows: list[DraftRow], index: int, text: str) -> list[DraftRow] {
     }
     minutes = min(MAX_DRAFT_MINUTES, max(1, int(cleaned)));
     return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=minutes, included=row.included));
+}
+
+"""A new, empty subtask at the end, for breaking an assignment down by hand."""
+def add_blank_row(rows: list[DraftRow]) -> list[DraftRow] {
+    return rows + [DraftRow(title="", tier=BLANK_ROW_TIER, minutes=BLANK_ROW_MINUTES)];
 }

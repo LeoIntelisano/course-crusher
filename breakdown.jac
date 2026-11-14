@@ -6,6 +6,7 @@ import os;
 import sys;
 import from datetime { datetime, timedelta, timezone }
 import from jaclang.byllm.lib { ByLLMError }
+import from shared.ai { AiStatus, current_ai_status, failure_message }
 
 glob logger: logging.Logger = logging.getLogger("course_crusher.breakdown");
 glob MAX_ASSIGNMENT_CHARS: int = 20000;
@@ -13,6 +14,7 @@ glob LLM_FIXTURE_ENV: str = "COURSE_CRUSHER_LLM_FIXTURE";
 glob FIXTURE_REPEATS: int = 1000;
 glob BREAKDOWNS_PER_HOUR: int = 30;
 glob QUOTA_WINDOW: timedelta = timedelta(hours=1);
+glob BREAKDOWN_UNAVAILABLE: str = "The AI breakdown isn't available right now. Try again in a minute, or add the subtasks by hand.";
 
 enum CognitiveTier: str {
     DEEP_WORK = "Deep Work",
@@ -157,18 +159,37 @@ def:protect break_down_assignment(assignment_text: str) -> BreakdownResult {
     return breakdown_result(assignment_text);
 }
 
-"""Run the breakdown and turn validation or model failures into a message."""
+"""Run the breakdown and turn validation or model failures into a message.
+
+Any exception from the model call counts: byLLM leaves provider errors it
+doesn't map (bad request, connection, provider 5xx) as the provider's own
+exception, and those used to escape as a 500. byLLM already retries output
+that doesn't parse, so nothing is retried here.
+"""
 def breakdown_result(assignment_text: str) -> BreakdownResult {
     try {
         return BreakdownResult(ok=True, subtasks=break_down(assignment_text));
     } except ValueError as err {
         return BreakdownResult(ok=False, error=str(err));
-    } except ByLLMError as err {
-        logger.error("Breakdown model call failed: %s", err);
-        return BreakdownResult(
-            ok=False, error="The AI breakdown isn't available right now. Try again in a minute."
-        );
+    } except Exception as err {
+        logger.exception("Breakdown model call failed (%s)", type(err).__name__);
+        return BreakdownResult(ok=False, error=model_failure(err));
     }
+}
+
+"""What to tell the student. A missing key surfaces from LiteLLM as an
+InternalServerError ("Missing credentials"), so check the setup first."""
+def model_failure(err: Exception) -> str {
+    status = current_ai_status(LLM_FIXTURE_ENV);
+    if not status.ready {
+        return status.message;
+    }
+    return failure_message(err, BREAKDOWN_UNAVAILABLE);
+}
+
+"""Whether breakdowns can run, so the screen can say so before the student pastes anything."""
+def:protect ai_status -> AiStatus {
+    return current_ai_status(LLM_FIXTURE_ENV);
 }
 
 """Answer every breakdown from a JSON fixture instead of a real model.
@@ -199,6 +220,10 @@ with entry {
     if os.environ.get(LLM_FIXTURE_ENV) {
         install_fixture_model(os.environ[LLM_FIXTURE_ENV]);
     }
+    startup_status = current_ai_status(LLM_FIXTURE_ENV);
+    if not startup_status.ready {
+        logger.warning("AI breakdowns will fail: %s", startup_status.message);
+    }
 }
 
 """Break down the description in `argv`; `jac run` prints the walker's report."""
@@ -210,6 +235,9 @@ def main(argv: list[str]) -> int {
         return 1;
     } except ByLLMError as err {
         print(f"breakdown: The model call failed: {err}", file=sys.stderr);
+        return 1;
+    } except Exception as err {
+        print(f"breakdown: {failure_message(err)}", file=sys.stderr);
         return 1;
     }
     return 0;

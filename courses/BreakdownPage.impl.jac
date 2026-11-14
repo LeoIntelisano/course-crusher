@@ -59,6 +59,7 @@ impl BreakdownPage.breakDown -> None {
     }
     failure = "";
     editing = False;
+    from_ai = True;
     source = description.strip();
     next_rows = [
         DraftRow(title=step.title, tier=str(step.tier), minutes=step.estimated_duration)

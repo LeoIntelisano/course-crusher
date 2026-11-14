@@ -58,6 +58,13 @@ Without an API key, run with canned breakdown output:
 COURSE_CRUSHER_LLM_FIXTURE=e2e/breakdown_fixture.json jac run
 ```
 
+If the AI breakdown fails, Breakdown says why: a missing key for the model in
+`LLM_MODEL` (default `gpt-4o-mini` needs `OPENAI_API_KEY`; `claude-*` needs
+`ANTHROPIC_API_KEY`), a rejected key, a rate limit, or an unreachable provider.
+The server also logs a warning at startup when the key is missing. Keys go in
+`.env`; restart the server after changing it. Subtasks can always be added by
+hand from Breakdown.
+
 The CLI is a second app in the same workspace:
 
 ```bash

@@ -45,3 +45,17 @@ test "minutes are cleaned and clamped" {
     assert retime_row(rows(), 0, "9000")[0].minutes == 480;
     assert retime_row(rows(), 0, "")[0].minutes == 35;
 }
+
+test "adding a blank row appends without touching the original" {
+    original = rows();
+
+    added = add_blank_row(original);
+
+    assert len(added) == 4 and len(original) == 3;
+    assert (added[3].title, added[3].tier, added[3].minutes, added[3].included) == ("", "Shallow Work", 30, True);
+    assert added[0] is original[0];
+}
+
+test "adding to an empty list starts a by-hand breakdown" {
+    assert [row.minutes for row in add_blank_row([])] == [30];
+}

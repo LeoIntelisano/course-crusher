@@ -5,6 +5,7 @@ import from .AppLayout { AppLayout }
 import from ..account.LoginPage { LoginPage }
 import from ..account.SettingsPage { SettingsPage }
 import from ..account.SignupPage { SignupPage }
+import from ..account.WelcomePage { WelcomePage }
 import from ..connections.ConnectionsPage { ConnectionsPage }
 import from ..connections.GoogleCallbackPage { GoogleCallbackPage }
 import from ..courses.BreakdownPage { BreakdownPage }
@@ -26,6 +27,7 @@ def:pub AppRoutes -> JsxElement {
                     <Route path="/connections" element={<ConnectionsPage />} />
                     <Route path="/connections/google/callback" element={<GoogleCallbackPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/welcome" element={<WelcomePage />} />
                     <Route path="*" element={<Navigate to="/" replace={True} />} />
                 </Route>
             </Route>

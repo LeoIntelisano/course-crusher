@@ -72,7 +72,7 @@ def:pub SignupPage -> JsxElement {
         }
         busy = False;
         # The account exists either way; send them to Settings to fix the name or zone.
-        nav("/" if profile and profile.ok else "/settings", {"replace": True});
+        nav("/welcome" if profile and profile.ok else "/settings", {"replace": True});
     }
 
     can with entry {

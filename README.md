@@ -10,7 +10,7 @@ The UI follows `wireframes/index.html` (kept as the design reference).
 |---|---|
 | **Today** | The agent's pick with a *why now* built from your calendar, energy and deadlines; a real focus timer; Reschedule, Swap task, Not today, Mark done; the rest of today's queue; this week's load by tier; the auto-fitted timeline; connection status; a week calendar of Google events (by name, in their course's color), class times, protected hours and planned blocks; click an event to link it to a course |
 | **Breakdown** | Paste an assignment → AI subtasks (tier + estimate) → toggle or edit them → live *Where it fits* and *Agent checks* → **Review schedule** lists each proposed time → **Approve schedule**. Nothing is scheduled until you approve, and approved times stay put while they're free |
-| **Plan** | The next seven days, grouped by day, plus anything that doesn't fit |
+| **Plan** | The next seven days, grouped by day, plus anything that doesn't fit; *Earlier today* lists approved blocks whose time has passed so you can mark them done (one by one or all at once) or send them back to the planner |
 | **Courses** | Courses with a color, weekly class times (treated as fixed events), calendar names and linked events that match Google events to the course, assignments and their subtasks |
 | **Connections** | Google Calendar (read-only event names and times) with per-account OAuth |
 | **Settings** | Day start/end, Deep Work cutoff, buffer around classes, shortest slot, protected hours, sign out |

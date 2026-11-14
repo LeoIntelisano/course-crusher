@@ -1,12 +1,14 @@
-"""Plan: the next seven days, the same rows as Today grouped by day."""
+"""Plan: the next seven days, the same rows as Today grouped by day, and an
+"Earlier today" card for closing out approved blocks whose time has passed.
+"""
 
-import from .service { get_week }
+import from .service { ActionResult, complete_tasks, get_week, release_task }
 import from .views { DayPlan, PlanItem, WeekView }
 import from ..courses.store { CourseResult, set_task_done }
 import from ..shell.PlannerContext { usePlanner }
 import from ..shared.errors { error_message }
 import from ..shared.format { format_minutes, tier_key }
-import from ..shared.styles { CARD, ROW_DOT }
+import from ..shared.styles { BUTTON_SMALL, CARD, ROW_DOT }
 import from ..shared.ui { CardHeader, EmptyState, Notice, TierChip }
 
 def:pub PlanRow(item: PlanItem, busy: bool, onDone: Callable[[str], None]) -> JsxElement {
@@ -60,6 +62,40 @@ def:pub DayCard(day: DayPlan, busy: bool, onDone: Callable[[str], None]) -> JsxE
     </section>
 }
 
+"""Approved blocks that ended today with the subtask still open: did it get done?"""
+def:pub EarlierToday(
+    items: list[PlanItem],
+    busy: bool,
+    onDone: Callable[[str], None],
+    onNotYet: Callable[[str], None],
+    onAllDone: Callable[[], None]
+) -> JsxElement {
+    <section className={CARD + " border-brand/40"} aria-labelledby="plan-earlier">
+        <CardHeader title="Earlier today — did you finish these?" titleId="plan-earlier">
+            {len(items) > 1 and <button type="button" className={BUTTON_SMALL + " ml-auto"} disabled={busy} onClick={lambda (e: MouseEvent) { onAllDone(); }}>
+                {f"Mark all {len(items)} done"}
+            </button>}
+        </CardHeader>
+        <p className="m-0 px-4 pt-1 text-[12px] text-muted">Their approved time has passed. Not yet puts a subtask back in the plan at the next free slot.</p>
+        <ul className="m-0 list-none divide-y divide-line p-0 pt-1.5 pb-1.5">
+            {for item in items {
+                <li key={item.task_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+                    <span className={ROW_DOT[tier_key(item.tier)]} aria-hidden="true"></span>
+                    <span className="w-[118px] flex-none text-[12.5px] font-semibold tabular-nums text-muted">{item.range_label}</span>
+                    <span className="min-w-0 flex-1">
+                        <div className="text-[13.5px] font-semibold tracking-[-0.1px]">{item.title}</div>
+                        <div className="mt-1 text-[12px] text-muted">{f"{item.course_code} · {item.assignment_title}"}</div>
+                    </span>
+                    <span className="flex flex-none gap-2">
+                        <button type="button" className={BUTTON_SMALL} disabled={busy} aria-label={f"{item.title} is done"} onClick={lambda (e: MouseEvent) { onDone(item.task_id); }}>✓ Done</button>
+                        <button type="button" className={BUTTON_SMALL} disabled={busy} aria-label={f"{item.title} isn't done yet"} onClick={lambda (e: MouseEvent) { onNotYet(item.task_id); }}>Not yet</button>
+                    </span>
+                </li>
+            }}
+        </ul>
+    </section>
+}
+
 def:pub WeekBoard(week: WeekView, busy: bool, onDone: Callable[[str], None]) -> JsxElement {
     <div className="flex flex-col gap-[13px]">
         {if week.at_risk > 0 {
@@ -102,6 +138,34 @@ def:pub PlanPage -> JsxElement {
         failure = "";
     }
 
+    """Run a plan action, then reload the week and the header counts."""
+    async def runAction(action: any) -> None {
+        busy = True;
+        result: ActionResult | None = None;
+        try {
+            result = await action();
+        } except Exception as err {
+            failure = error_message(err);
+            busy = False;
+            return;
+        }
+        if result and not result.ok {
+            failure = result.error;
+        }
+        await load();
+        await ctx.refreshToday();
+        busy = False;
+    }
+
+    def notYet(task_id: str) {
+        runAction(lambda { return release_task(task_id); });
+    }
+
+    def allDone {
+        ids = [item.task_id for item in (week.ended_today if week else [])];
+        runAction(lambda { return complete_tasks(ids); });
+    }
+
     async def markDone(task_id: str) -> None {
         busy = True;
         result: CourseResult | None = None;
@@ -129,7 +193,10 @@ def:pub PlanPage -> JsxElement {
         {if week is None {
             <section className={CARD}><EmptyState title="Loading your week…" detail="" /></section>
         } else {
-            <WeekBoard week={week} busy={busy} onDone={markDone} />
+            <>
+                {len(week.ended_today) > 0 and <EarlierToday items={week.ended_today} busy={busy} onDone={markDone} onNotYet={notYet} onAllDone={allDone} />}
+                <WeekBoard week={week} busy={busy} onDone={markDone} />
+            </>
         }}
     </div>
 }

@@ -17,6 +17,30 @@ obj DraftRow {
     has included: bool = True;
 }
 
+"""Everything on Breakdown that isn't saved yet, kept while the student visits other screens."""
+obj BreakdownDraft {
+    has course_id: str = "";
+    has title: str = "";
+    has due_at: str = "";
+    has description: str = "";
+    has source: str = "";
+    has rows: list[DraftRow] = [];
+}
+
+"""Nothing typed and no breakdown yet. The course alone doesn't count: it's picked by default."""
+def is_blank(draft: BreakdownDraft) -> bool {
+    typed = draft.title.strip() + draft.due_at.strip() + draft.description.strip() + draft.source.strip();
+    return not typed and len(draft.rows) == 0;
+}
+
+"""Keep the student's course while it still exists, else fall back to the first one."""
+def course_to_select(course_ids: list[str], wanted: str) -> str {
+    if wanted and wanted in course_ids {
+        return wanted;
+    }
+    return course_ids[0] if len(course_ids) > 0 else "";
+}
+
 """The title to save: what the student typed, else the description's first line."""
 def default_title(title: str, description: str) -> str {
     if title.strip() {

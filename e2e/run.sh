@@ -65,10 +65,32 @@ click_button() {
     || fail "couldn't click \"$label\""
 }
 
-# Set an input React controls (date/time inputs ignore synthetic typing).
+# Poll until the JavaScript expression $1 evaluates to $2 ($3 names it in the output).
+expect_eval() {
+  local expression="$1" expected="$2" label="$3" waited=0 actual=""
+  until actual="$(browse eval "$expression" 2>/dev/null)"; [ "$actual" = "$expected" ]; do
+    sleep 1
+    waited=$((waited + 1))
+    [ "$waited" -lt "$TIMEOUT_SECONDS" ] || fail "$label never became \"$expected\" (last: \"$actual\")"
+  done
+  pass "$label is \"$expected\""
+}
+
+expect_value() { expect_eval "document.querySelector('$1')?.value ?? ''" "$2" "$1"; }
+expect_course() { expect_eval "document.querySelector('#bd-course')?.selectedOptions[0]?.textContent ?? ''" "$1" "selected course"; }
+
+# Follow an in-app link. Unlike `browse navigate`, this keeps the app's state.
+go_to() {
+  local path="$1"
+  browse eval "(() => { const a = document.querySelector('a[href=\"$path\"]'); if (!a) throw new Error('no link: $path'); a.click(); return true; })()" >/dev/null \
+    || fail "couldn't follow the link to $path"
+}
+
+# Replace the value of an input or textarea React controls. Date/time inputs ignore
+# synthetic typing, and `browse fill` types into a field without clearing it first.
 set_value() {
   local selector="$1" value="$2"
-  browse eval "(() => { const i = document.querySelector('$selector'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(i, '$value'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()" >/dev/null \
+  browse eval "(() => { const i = document.querySelector('$selector'); const proto = i instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, '$value'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()" >/dev/null \
     || fail "couldn't set $selector"
 }
 
@@ -131,19 +153,55 @@ if [ "${CANVAS_SAMPLES:-0}" = "1" ]; then
   [ "$(browse eval "document.querySelector('#bd-due').value")" = "" ] || fail "old due date remained"
 fi
 
-browse fill '#bd-title' 'Project 2' >/dev/null
+set_value '#bd-title' 'Project 2'
 set_value '#bd-due' '2030-01-15T23:59'
-browse fill '#assignment-input' 'Project 2: implement logistic regression from scratch. Submit train.py and a short report with a learning-rate ablation.' >/dev/null
+set_value '#assignment-input' 'Project 2: implement logistic regression from scratch. Submit train.py and a short report with a learning-rate ablation.'
+
+step "The draft survives adding a course on Courses"
+go_to /courses
+expect_text "Add a course"
+browse fill '#course-code' 'eecs 482' >/dev/null
+click_button 'Add course'
+expect_text "EECS 482"
+go_to /breakdown
+expect_text "Break down a new assignment"
+expect_value '#bd-title' 'Project 2'
+expect_value '#bd-due' '2030-01-15T23:59'
+expect_eval "document.querySelector('#assignment-input').value.startsWith('Project 2: implement')" "true" "description kept"
+expect_eval "[...document.querySelectorAll('#bd-course option')].map(o => o.textContent).join(',')" "EECS 445,EECS 482" "course options"
+expect_course "EECS 445"
+
+step "Add a course without leaving Breakdown"
+click_button 'New course'
+browse fill '#new-course' 'eecs 492' >/dev/null
+click_button 'Add course'
+expect_course "EECS 492"
+expect_eval "document.querySelector('#new-course') === null" "true" "new-course field closed"
+browse eval "(() => { const s = document.querySelector('#bd-course'); s.value = [...s.options].find(o => o.textContent === 'EECS 445').value; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()" >/dev/null
+expect_course "EECS 445"
+expect_value '#bd-title' 'Project 2'
+
 click_button 'Break down assignment'
 expect_text "Agent breakdown — 5 subtasks, 3h 20m total"
 expect_text "of buffer"
 expect_text "Deep Work kept off late nights"
 
-step "Review the subtasks and add them to the plan"
+step "Review the subtasks; they survive a look at Today"
 browse click 'button[aria-label="Include Proofread and submit to Canvas"]' >/dev/null
 expect_text "Add 4 to plan"
+go_to /
+expect_no_text "Agent breakdown —"
+go_to /breakdown
+expect_text "Agent breakdown — 5 subtasks, 3h 20m total"
+expect_text "Add 4 to plan"
+expect_text "of buffer"
+expect_course "EECS 445"
+
+step "Add them to the plan"
 click_button 'Add 4 to plan'
 expect_text "Added 4 subtasks to your plan."
+expect_value '#bd-title' ''
+expect_value '#assignment-input' ''
 
 step "Today shows the agent's pick"
 browse navigate "$BASE_URL/" >/dev/null
@@ -175,12 +233,33 @@ browse navigate "$BASE_URL/plan" >/dev/null
 expect_text "Run the learning-rate ablation and save loss curves"
 expect_text "EECS 445 Lecture"
 
+step "Discard a Breakdown draft"
+go_to /breakdown
+browse fill '#assignment-input' 'Lab 4 report: damped pendulum' >/dev/null
+click_button 'Discard draft'
+expect_value '#assignment-input' ''
+browse fill '#assignment-input' 'Unsaved draft from the first account' >/dev/null
+
 step "Protected hours and sign out"
-browse navigate "$BASE_URL/settings" >/dev/null
+go_to /settings
 expect_text "Protected hours"
 browse fill '#block-label' 'Dinner & gym' >/dev/null
 click_button 'Add'
 expect_text "Dinner & gym is now protected."
+click_button 'Sign out'
+expect_url "/login"
+
+step "A draft doesn't carry over to the next account"
+go_to /signup
+browse fill '#signup-name' 'Second Student' >/dev/null
+browse fill '#signup-email' "e2e-${STAMP}-second@coursecrusher.test" >/dev/null
+browse fill '#signup-password' "$PASSWORD" >/dev/null
+click_button 'Create account'
+expect_url "/"
+go_to /breakdown
+expect_text "Break down a new assignment"
+expect_value '#assignment-input' ''
+go_to /settings
 click_button 'Sign out'
 expect_url "/login"
 browse navigate "$BASE_URL/plan" >/dev/null

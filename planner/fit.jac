@@ -35,6 +35,7 @@ obj FitBlock {
     has minutes: int;
     has placed: bool;
     has when_label: str;
+    has start: str = "";
 }
 
 """One row of "Where it fits": a day and what lands on it."""
@@ -100,7 +101,8 @@ def fit_view(
                 tier=str(task.tier),
                 minutes=task.minutes,
                 placed=spot is not None,
-                when_label=when
+                when_label=when,
+                start=spot.start.isoformat() if spot is not None else ""
             )
         ];
     }

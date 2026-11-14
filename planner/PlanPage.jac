@@ -22,6 +22,7 @@ def:pub PlanRow(item: PlanItem, busy: bool, onDone: Callable[[str], None]) -> Js
                 <TierChip tier={item.tier} />
                 <span>{f"{item.course_code} · {item.assignment_title}"}</span>
                 {item.late and <span className="font-semibold text-danger">after the deadline</span>}
+                {item.approved and <span className="font-semibold text-brand" title="The time you approved on Breakdown">approved time</span>}
             </div>
         </span>
         <button

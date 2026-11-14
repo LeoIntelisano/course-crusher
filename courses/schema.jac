@@ -46,7 +46,11 @@ node Assignment {
     has created_at: str = "";
 }
 
-"""One subtask in the plan. `not_before` is set by Reschedule and Not today."""
+"""One subtask in the plan. `not_before` is set by Reschedule and Not today.
+
+`approved_start` is the time the student approved on Breakdown (ISO, or ""). The
+planner keeps it while it still fits; Reschedule and Not today clear it.
+"""
 node Task {
     has title: str;
     has tier: CognitiveTier;
@@ -55,6 +59,7 @@ node Task {
     has done: bool = False;
     has completed_at: str = "";
     has not_before: str = "";
+    has approved_start: str = "";
 }
 
 edge MeetsAt: Course --> ClassMeeting {}

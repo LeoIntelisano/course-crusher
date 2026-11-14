@@ -314,3 +314,42 @@ test "removing a course drops the event links that pointed to it" {
         client.close();
     }
 }
+
+test "approved times are saved by position and junk is dropped" {
+    client = signed_in_client();
+    try {
+        course = create_course(client, "EECS 445");
+        result = call(client, "add_assignment", {
+            "course_id": course["id"],
+            "title": "Lab report",
+            "description": "",
+            "due_at": "",
+            "subtasks": [subtask_draft("Outline"), subtask_draft("Draft"), subtask_draft("Submit")],
+            "approved_starts": ["2026-10-20T15:00:00+00:00", "not a time"]
+        });
+
+        assert result["ok"], result["error"];
+        tasks = result["courses"][0]["assignments"][0]["tasks"];
+        assert [t["approved_start"] for t in tasks] == ["2026-10-20T15:00:00+00:00", "", ""];
+    } finally {
+        client.close();
+    }
+}
+
+test "subtasks saved without approved times have none" {
+    client = signed_in_client();
+    try {
+        course = create_course(client, "EECS 445");
+        result = create_assignment(client, course["id"], [subtask_draft("Outline")]);
+
+        assert result["courses"][0]["assignments"][0]["tasks"][0]["approved_start"] == "";
+    } finally {
+        client.close();
+    }
+}
+
+test "clean_starts pads, trims and normalizes" {
+    assert clean_starts([], 2) == ["", ""];
+    assert clean_starts([" 2026-10-20T11:00:00-04:00 ", "2026-10-20T11:00:00"], 2) == ["2026-10-20T11:00:00-04:00", ""];
+    assert clean_starts(["2026-10-20T11:00:00+00:00", "2026-10-21T11:00:00+00:00"], 1) == ["2026-10-20T11:00:00+00:00"];
+}

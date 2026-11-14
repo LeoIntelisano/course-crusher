@@ -19,3 +19,8 @@ test "the tab bar holds the four primary screens" {
     assert [item.label for item in PRIMARY_NAV if item.in_tab_bar] == ["Today", "Plan", "Breakdown", "Courses"];
     assert [item.label for item in WORKSPACE_NAV] == ["Connections", "Settings"];
 }
+
+test "workspace screens light up the More tab" {
+    assert in_workspace("/settings") and in_workspace("/connections/google/callback");
+    assert not in_workspace("/") and not in_workspace("/plan");
+}

@@ -38,6 +38,22 @@ test "edits replace one row" {
     assert original[0].title == "Set up train.py" and original[1].tier == "Deep Work";
 }
 
+test "a draft is blank until the student types or the agent answers" {
+    assert is_blank(BreakdownDraft());
+    assert is_blank(BreakdownDraft(course_id="course-1", title="  ", description="\n"));
+    assert not is_blank(BreakdownDraft(title="Project 2"));
+    assert not is_blank(BreakdownDraft(due_at="2030-01-15T23:59"));
+    assert not is_blank(BreakdownDraft(description="Lab 4 report"));
+    assert not is_blank(BreakdownDraft(rows=rows()));
+}
+
+test "the kept course stays selected while it still exists" {
+    assert course_to_select(["course-1", "course-2"], "course-2") == "course-2";
+    assert course_to_select(["course-1", "course-2"], "deleted") == "course-1";
+    assert course_to_select(["course-1", "course-2"], "") == "course-1";
+    assert course_to_select([], "course-2") == "";
+}
+
 test "minutes are cleaned and clamped" {
     assert retime_row(rows(), 0, "45")[0].minutes == 45;
     assert retime_row(rows(), 0, "45 min")[0].minutes == 45;

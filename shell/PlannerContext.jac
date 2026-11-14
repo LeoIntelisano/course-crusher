@@ -2,11 +2,15 @@
 
 Screens call `refreshToday()` after a write so the header pills, counts and the
 Today screen stay in step without each fetching on its own.
+
+It also holds the unsaved Breakdown draft, so leaving Breakdown doesn't lose it.
+The provider lives inside the signed-in layout, so signing out drops the draft.
 """
 
 import from "react" { createContext, useContext }
 import from "@jac/runtime" { jacLogout, useNavigate }
 import from ..account.store { ProfileResult, set_energy }
+import from ..courses.drafts { BreakdownDraft }
 import from ..planner.service { get_today }
 import from ..planner.views { TodayView }
 import from ..shared.errors { error_message, is_unauthorized }
@@ -17,7 +21,12 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
     has today: TodayView | None = None;
     has loading: bool = True;
     has failure: str = "";
+    has breakdown_draft: BreakdownDraft | None = None;
     nav = useNavigate();
+
+    def keepBreakdownDraft(draft: BreakdownDraft) {
+        breakdown_draft = draft;
+    }
 
     async def refreshToday -> None {
         latest: TodayView | None = None;
@@ -63,7 +72,9 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
         "loading": loading,
         "failure": failure,
         "refreshToday": refreshToday,
-        "changeEnergy": changeEnergy
+        "changeEnergy": changeEnergy,
+        "breakdownDraft": breakdown_draft,
+        "keepBreakdownDraft": keepBreakdownDraft
     };
     <PlannerCtx.Provider value={value}>{children}</PlannerCtx.Provider>
 }

@@ -1,27 +1,44 @@
 """Breakdown: paste an assignment, review the agent's subtasks, see where they fit, add them to the plan.
 
-Nothing is scheduled until the student presses "Add N to plan".
+Nothing is scheduled until the student presses "Add N to plan". Until then the
+draft is kept in the planner context, so visiting another screen doesn't lose it.
 """
 
 import from "@jac/runtime" { Link }
 import from ..connectors.canvas_assignments { CanvasAssignmentDraft }
 import from ..connectors.canvas_preview { list_canvas_samples }
 import from .BreakdownCards { ChecksCard, FitCard, SubtaskRow, when_labels }
-import from .drafts { DraftRow, default_title, included_rows, retier_row, retime_row, retitle_row, summary, toggle_row }
+import from .drafts {
+    BreakdownDraft,
+    DraftRow,
+    course_to_select,
+    default_title,
+    included_rows,
+    is_blank,
+    retier_row,
+    retime_row,
+    retitle_row,
+    summary,
+    toggle_row
+}
 import from .store { CourseResult, CourseView, SubtaskDraft, add_assignment, add_course, list_courses }
 import from ..breakdown { BreakdownResult, Subtask, break_down_assignment }
 import from ..planner.fit { FitPreview }
 import from ..planner.service { FitResult, preview_fit }
 import from ..shell.PlannerContext { usePlanner }
 import from ..shared.errors { error_message }
-import from ..shared.styles { BUTTON, BUTTON_PRIMARY, CARD, CARD_STACK, COLUMNS, FIELD, HINT, LABEL, TEXTAREA }
+import from ..shared.styles { BUTTON, BUTTON_GHOST, BUTTON_PRIMARY, CARD, CARD_STACK, COLUMNS, FIELD, HINT, LABEL, TEXTAREA }
 import from ..shared.ui { CardHeader, Notice }
+
+glob LINK_BUTTON: str = "cursor-pointer border-0 bg-transparent p-0 text-[12px] font-semibold text-brand hover:underline";
 
 def:pub BreakdownPage -> JsxElement {
     ctx: any = usePlanner();
     has courses: list[CourseView] = [];
     has course_id: str = "";
     has new_code: str = "";
+    has adding_course: bool = False;
+    has restored: bool = False;
     has title: str = "";
     has due_at: str = "";
     has description: str = "";
@@ -69,6 +86,12 @@ def:pub BreakdownPage -> JsxElement {
         }
     }
 
+    def currentDraft -> BreakdownDraft {
+        return BreakdownDraft(course_id=course_id, title=title, due_at=due_at, description=description, source=source, rows=rows);
+    }
+
+    def restoreDraft -> None;
+    def discardDraft -> None;
     async def loadCourses -> None;
     async def createCourse -> None;
     async def breakDown -> None;
@@ -88,6 +111,14 @@ def:pub BreakdownPage -> JsxElement {
         }
     }
 
+    # Enter here adds the course instead of submitting the form (a breakdown).
+    def onCourseKeys(e: KeyboardEvent) {
+        if e.key == "Enter" {
+            e.preventDefault();
+            createCourse();
+        }
+    }
+
     def finishEditing(e: MouseEvent) {
         editing = not editing;
         if not editing {
@@ -95,14 +126,27 @@ def:pub BreakdownPage -> JsxElement {
         }
     }
 
+    # Declared before the mount effect so the first render can't overwrite the kept draft.
+    can with (course_id, title, due_at, description, source, rows) entry {
+        if restored {
+            ctx.keepBreakdownDraft(currentDraft());
+        }
+    }
+
     async can with entry {
+        restoreDraft();
         await loadCourses();
+        if len(rows) > 0 {
+            await refreshFit(rows);
+        }
     }
 
     chosen = [c for c in courses if c.id == course_id];
     course_code = chosen[0].code if chosen else "";
     labels = when_labels(rows, preview);
     adding = len(included_rows(rows));
+    has_courses = len(courses) > 0;
+    blank = is_blank(currentDraft());
 
     <div className={COLUMNS}>
         <div className={CARD_STACK}>
@@ -127,9 +171,9 @@ def:pub BreakdownPage -> JsxElement {
                             </select>
                         }}
                     </div>
-                    {if len(courses) == 0 {
+                    {if adding_course or not has_courses {
                         <div>
-                            <label className={LABEL} htmlFor="new-course">Course</label>
+                            <label className={LABEL} htmlFor="new-course">{"New course" if has_courses else "Course"}</label>
                             <div className="flex gap-2">
                                 <input
                                     id="new-course"
@@ -137,29 +181,42 @@ def:pub BreakdownPage -> JsxElement {
                                     placeholder="e.g. EECS 445"
                                     value={new_code}
                                     onChange={lambda (e: ChangeEvent) { new_code = e.target.value; }}
+                                    onKeyDown={onCourseKeys}
+                                    autoFocus={adding_course}
                                 />
                                 <button type="button" className={BUTTON + " mt-[7px] whitespace-nowrap"} onClick={lambda (e: MouseEvent) { createCourse(); }}>Add course</button>
+                                {if has_courses {
+                                    <button type="button" className={BUTTON_GHOST + " mt-[7px]"} onClick={lambda (e: MouseEvent) { adding_course = False; new_code = ""; }}>Cancel</button>
+                                }}
                             </div>
-                            <p className={HINT}>You can preview a breakdown first. Add a course before saving it to your plan.</p>
+                            {if not has_courses {
+                                <p className={HINT}>You can preview a breakdown first. Add a course before saving it to your plan.</p>
+                            }}
                         </div>
-                    } else {
-                        <div className="grid grid-cols-1 gap-4 desk:grid-cols-3">
+                    }}
+                    <div className={"grid grid-cols-1 gap-4 desk:grid-cols-3" if has_courses else "grid grid-cols-1 gap-4 desk:grid-cols-2"}>
+                        {if has_courses {
                             <div>
-                                <label className={LABEL} htmlFor="bd-course">Course</label>
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <label className={LABEL} htmlFor="bd-course">Course</label>
+                                    {if not adding_course {
+                                        <button type="button" className={LINK_BUTTON} onClick={lambda (e: MouseEvent) { adding_course = True; }}>+ New course</button>
+                                    }}
+                                </div>
                                 <select id="bd-course" className={FIELD} value={course_id} onChange={lambda (e: ChangeEvent) { course_id = e.target.value; }}>
                                     {for course in courses { <option key={course.id} value={course.id}>{course.code}</option> }}
                                 </select>
                             </div>
-                            <div>
-                                <label className={LABEL} htmlFor="bd-title">Title</label>
-                                <input id="bd-title" className={FIELD} placeholder="Project 2" value={title} onChange={lambda (e: ChangeEvent) { title = e.target.value; }} />
-                            </div>
-                            <div>
-                                <label className={LABEL} htmlFor="bd-due">Due</label>
-                                <input id="bd-due" type="datetime-local" className={FIELD} value={due_at} onChange={lambda (e: ChangeEvent) { due_at = e.target.value; }} />
-                            </div>
+                        }}
+                        <div>
+                            <label className={LABEL} htmlFor="bd-title">Title</label>
+                            <input id="bd-title" className={FIELD} placeholder="Project 2" value={title} onChange={lambda (e: ChangeEvent) { title = e.target.value; }} />
                         </div>
-                    }}
+                        <div>
+                            <label className={LABEL} htmlFor="bd-due">Due</label>
+                            <input id="bd-due" type="datetime-local" className={FIELD} value={due_at} onChange={lambda (e: ChangeEvent) { due_at = e.target.value; }} />
+                        </div>
+                    </div>
                     <div>
                         <label className={LABEL} htmlFor="assignment-input">Assignment description</label>
                         <textarea
@@ -181,6 +238,9 @@ def:pub BreakdownPage -> JsxElement {
                             {"Breaking down…" if breaking else "Break down assignment"}
                         </button>
                         <span className="hidden text-[11.5px] text-faint desk:inline">⌘/Ctrl + Enter</span>
+                        {if not blank {
+                            <button type="button" className={BUTTON_GHOST + " desk:ml-auto"} disabled={breaking or saving} onClick={lambda (e: MouseEvent) { discardDraft(); }}>Discard draft</button>
+                        }}
                     </div>
                 </form>
             </section>
@@ -188,7 +248,7 @@ def:pub BreakdownPage -> JsxElement {
             {if len(rows) > 0 {
                 <section className={CARD} aria-labelledby="bd">
                     <div className="border-b border-line px-3.5 py-3 desk:px-4 desk:py-3.5">
-                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">{f"Source · Reviewed · {course_code}"}</div>
+                        <div className="text-[11px] font-[650] uppercase tracking-[.08em] text-faint">{"Source · Reviewed" + (f" · {course_code}" if course_code else "")}</div>
                         <p className="mt-2 mb-0 line-clamp-4 border-l-2 border-line-strong pl-[11px] text-[12.5px] leading-[1.55] text-body whitespace-pre-line">{source}</p>
                     </div>
                     <div className="flex items-center gap-2.5 px-4 pt-3">

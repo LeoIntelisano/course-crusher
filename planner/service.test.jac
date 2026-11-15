@@ -233,3 +233,58 @@ test "preview blocks carry the start the student would approve" {
         client.close();
     }
 }
+
+"""Add a one-step assignment approved 40 minutes ago (30 minutes long), and return its id."""
+def add_ended(client: JacTestClient, title: str) -> str {
+    course = call(client, "list_courses")[0];
+    started = (datetime.now(timezone.utc) - timedelta(minutes=40)).replace(second=0, microsecond=0);
+    saved = call(client, "add_assignment", {
+        "course_id": course["id"],
+        "title": title,
+        "description": "",
+        "due_at": "",
+        "subtasks": [subtask_draft(f"{title} step", "Shallow Work", 30)],
+        "approved_starts": [started.isoformat()]
+    });
+    assert saved["ok"], saved["error"];
+    return [a for a in saved["courses"][0]["assignments"] if a["title"] == title][0]["tasks"][0]["id"];
+}
+
+def ended_ids(client: JacTestClient) -> list[str] {
+    return [item["task_id"] for item in call(client, "get_week")["ended_today"]];
+}
+
+test "earlier-today blocks can be released or closed out together" {
+    client = seeded_client();
+    try {
+        first = add_ended(client, "Reading");
+        second = add_ended(client, "Quiz");
+        third = add_ended(client, "Lab");
+        # Past UTC 00:40 those blocks started yesterday; the view logic is covered in views.test.jac.
+        if datetime.now(timezone.utc).hour >= 1 {
+            assert sorted(ended_ids(client)) == sorted([first, second, third]);
+        }
+
+        assert call(client, "release_task", {"task_id": first})["ok"];
+        assert call(client, "complete_tasks", {"task_ids": [second, third, "missing"]})["ok"];
+
+        assert ended_ids(client) == [];
+        week_ids = [i["task_id"] for i in week_items(client)];
+        assert first in week_ids and second not in week_ids and third not in week_ids;
+        assert call(client, "get_today")["open_tasks"] == 4;
+    } finally {
+        client.close();
+    }
+}
+
+test "closing out validates its input" {
+    client = seeded_client();
+    try {
+        assert not call(client, "complete_tasks", {"task_ids": []})["ok"];
+        assert not call(client, "complete_tasks", {"task_ids": ["missing"]})["ok"];
+        assert "at most" in call(client, "complete_tasks", {"task_ids": ["x"] * 51})["error"];
+        assert not call(client, "release_task", {"task_id": "missing"})["ok"];
+    } finally {
+        client.close();
+    }
+}

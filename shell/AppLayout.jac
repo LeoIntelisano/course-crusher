@@ -59,6 +59,17 @@ def:pub AppFrame -> JsxElement {
             />}
             <main id="main" className="flex-1 overflow-auto px-3.5 pt-3.5 pb-[84px] desk:px-[22px] desk:pt-4 desk:pb-[18px]">
                 {ctx.failure and <div className="mb-3"><Notice tone="error" message={ctx.failure} /></div>}
+                {ctx.energyNotice and <div className="mb-3 flex items-start gap-2 rounded-md bg-brand-bg px-[13px] py-[11px]">
+                    <p role="status" className="m-0 flex-1 text-[12.5px] font-semibold text-brand">{ctx.energyNotice}</p>
+                    <button
+                        type="button"
+                        aria-label="Dismiss"
+                        className="border-0 bg-transparent p-0 text-[14px] leading-none text-brand cursor-pointer"
+                        onClick={lambda (e: MouseEvent) { ctx.dismissEnergyNotice(); }}
+                    >
+                        ×
+                    </button>
+                </div>}
                 <Outlet />
             </main>
         </div>

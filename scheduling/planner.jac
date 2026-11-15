@@ -14,8 +14,10 @@ Rules, in the order they are applied:
    breakdown order and never start before the previous one ends.
 3. Each task goes into the earliest gap it fits whole; tasks are never split.
 4. Deep Work must end by `deep_work_cutoff`, so it stays off late nights.
-5. With energy set to Low, today's Deep Work moves to a later day unless it is
-   due today or overdue.
+5. Energy sets how much Deep Work fits in the rest of today: no cap at High,
+   `MEDIUM_DEEP_WORK_MINUTES` at Medium, none at Low. Deep Work due today or
+   overdue is never held back and doesn't count against the cap. Whatever
+   doesn't fit today moves to a later day.
 6. A task with an approved time (`fixed_start`) is placed there first and keeps
    it while that time is still free, not over, and allowed by rules 4 and 5. A
    block already under way keeps its start. Otherwise the task is placed like
@@ -35,6 +37,7 @@ glob DEFAULT_HORIZON_DAYS: int = 7;
 glob MAX_HORIZON_DAYS: int = 28;
 glob START_GRANULARITY_MINUTES: int = 5;
 glob NO_DEADLINE: datetime = datetime.max.replace(tzinfo=timezone.utc);
+glob MEDIUM_DEEP_WORK_MINUTES: int = 90;
 
 """How much focus the student says they have right now."""
 enum Energy: str {
@@ -207,19 +210,42 @@ def sort_key(task: PlanTask) -> tuple[datetime, str, int, str] {
     return (task.due or NO_DEADLINE, task.group_id, task.order, task.task_id);
 }
 
-def deep_work_allowed(task: PlanTask, gap_day: date, rules: PlanRules, today: date) -> bool {
-    if task.tier != CognitiveTier.DEEP_WORK {
+"""Minutes of Deep Work that fit in the rest of today at `energy`; None means no cap."""
+def deep_work_budget(energy: Energy) -> int | None {
+    if energy == Energy.LOW {
+        return 0;
+    }
+    if energy == Energy.MEDIUM {
+        return MEDIUM_DEEP_WORK_MINUTES;
+    }
+    return None;
+}
+
+"""Today's Deep Work that the energy cap applies to: not due today and not overdue."""
+def capped_today(task: PlanTask, gap_day: date, rules: PlanRules, today: date) -> bool {
+    if task.tier != CognitiveTier.DEEP_WORK or gap_day != today {
+        return False;
+    }
+    return task.due is None or local_day(task.due, rules.zone) > today;
+}
+
+"""Rule 5. `deep_used` is the capped Deep Work already placed today."""
+def deep_work_allowed(task: PlanTask, gap_day: date, rules: PlanRules, today: date, deep_used: int = 0) -> bool {
+    if not capped_today(task, gap_day, rules, today) {
         return True;
     }
-    if rules.energy != Energy.LOW or gap_day != today {
-        return True;
-    }
-    return task.due is not None and local_day(task.due, rules.zone) <= today;
+    budget = deep_work_budget(rules.energy);
+    return budget is None or deep_used + task.minutes <= budget;
+}
+
+"""What placing `task` at `start` adds to today's capped Deep Work."""
+def budget_cost(task: PlanTask, start: datetime, rules: PlanRules, today: date) -> int {
+    return task.minutes if capped_today(task, local_day(start, rules.zone), rules, today) else 0;
 }
 
 """The earliest start for `task` inside `gap`, or None when it does not fit there."""
 def fit_in_gap(
-    task: PlanTask, gap: TimeSlot, earliest: datetime, rules: PlanRules, today: date
+    task: PlanTask, gap: TimeSlot, earliest: datetime, rules: PlanRules, today: date, deep_used: int = 0
 ) -> datetime | None {
     start = round_up(max(gap.start_time, earliest).astimezone(rules.zone));
     end = start + timedelta(minutes=task.minutes);
@@ -227,7 +253,7 @@ def fit_in_gap(
         return None;
     }
     gap_day = local_day(start, rules.zone);
-    if not deep_work_allowed(task, gap_day, rules, today) {
+    if not deep_work_allowed(task, gap_day, rules, today, deep_used) {
         return None;
     }
     if task.tier == CognitiveTier.DEEP_WORK and end > at_local(gap_day, rules.deep_work_cutoff, rules.zone) {
@@ -258,12 +284,14 @@ def gap_holding(gaps: list[TimeSlot], start: datetime, end: datetime) -> int {
 }
 
 """Whether an approved time still stands: not over, not before `not_before`, and allowed today."""
-def fixed_time_allowed(task: PlanTask, start: datetime, end: datetime, rules: PlanRules, now: datetime, today: date) -> bool {
+def fixed_time_allowed(
+    task: PlanTask, start: datetime, end: datetime, rules: PlanRules, now: datetime, today: date, deep_used: int
+) -> bool {
     if end <= now or (task.not_before is not None and start < task.not_before) {
         return False;
     }
     day = local_day(start, rules.zone);
-    if not deep_work_allowed(task, day, rules, today) {
+    if not deep_work_allowed(task, day, rules, today, deep_used) {
         return False;
     }
     return not (task.tier == CognitiveTier.DEEP_WORK and end > at_local(day, rules.deep_work_cutoff, rules.zone));
@@ -281,15 +309,19 @@ def approved_times(tasks: list[PlanTask]) -> list[tuple[datetime, PlanTask]] {
     return sorted(pinned, key=lambda (pair: tuple[datetime, PlanTask]) -> datetime { return pair[0]; });
 }
 
-"""Rule 6: keep each approved time that still stands, consuming its slot from the gaps."""
+"""Rule 6: keep each approved time that still stands, consuming its slot from the gaps.
+
+Returns the kept placements, the gaps left, and the capped Deep Work they use today.
+"""
 def place_fixed(
     tasks: list[PlanTask], gaps: list[TimeSlot], rules: PlanRules, now: datetime, today: date
-) -> tuple[list[Placement], list[TimeSlot]] {
+) -> tuple[list[Placement], list[TimeSlot], int] {
     placements: list[Placement] = [];
+    deep_used = 0;
     earliest = round_up(now.astimezone(rules.zone));
     for (start, task) in approved_times(tasks) {
         end = start + timedelta(minutes=task.minutes);
-        if not fixed_time_allowed(task, start, end, rules, now, today) {
+        if not fixed_time_allowed(task, start, end, rules, now, today, deep_used) {
             continue;
         }
         # A block already under way only needs what's left of it to be free.
@@ -300,8 +332,9 @@ def place_fixed(
         }
         placements = placements + [Placement(task_id=task.task_id, start=start, end=end, fixed=True)];
         gaps = consume(gaps, index, held_from, end);
+        deep_used = deep_used + budget_cost(task, start, rules, today);
     }
-    return (placements, gaps);
+    return (placements, gaps, deep_used);
 }
 
 def earliest_start(task: PlanTask, now: datetime, ready: dict[str, datetime]) -> datetime {
@@ -321,7 +354,7 @@ def plan_tasks(
         validate_task(task);
     }
     today = local_day(now, rules.zone);
-    (placements, gaps) = place_fixed(tasks, free_gaps(events, protected, rules, now), rules, now, today);
+    (placements, gaps, deep_used) = place_fixed(tasks, free_gaps(events, protected, rules, now), rules, now, today);
     kept = {p.task_id: p for p in placements};
     unplaced: list[str] = [];
     ready: dict[str, datetime] = {};
@@ -339,7 +372,7 @@ def plan_tasks(
             continue;
         }
         earliest = earliest_start(task, now, ready);
-        spot = first_fit(task, gaps, earliest, rules, today);
+        spot = first_fit(task, gaps, earliest, rules, today, deep_used);
         if spot is None {
             unplaced = unplaced + [task.task_id];
             if task.group_id {
@@ -352,6 +385,7 @@ def plan_tasks(
         end = start + timedelta(minutes=task.minutes);
         placements = placements + [Placement(task_id=task.task_id, start=start, end=end)];
         gaps = consume(gaps, index, start, end);
+        deep_used = deep_used + budget_cost(task, start, rules, today);
         if task.group_id {
             ready = {**ready, task.group_id: end};
         }
@@ -365,13 +399,13 @@ def plan_tasks(
 }
 
 def first_fit(
-    task: PlanTask, gaps: list[TimeSlot], earliest: datetime, rules: PlanRules, today: date
+    task: PlanTask, gaps: list[TimeSlot], earliest: datetime, rules: PlanRules, today: date, deep_used: int = 0
 ) -> tuple[int, datetime] | None {
     for (index, gap) in enumerate(gaps) {
         if gap.end_time <= earliest {
             continue;
         }
-        start = fit_in_gap(task, gap, earliest, rules, today);
+        start = fit_in_gap(task, gap, earliest, rules, today, deep_used);
         if start is not None {
             return (index, start);
         }

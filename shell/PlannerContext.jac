@@ -14,6 +14,7 @@ import from ..courses.drafts { BreakdownDraft }
 import from ..planner.service { get_today }
 import from ..planner.views { TodayView }
 import from ..shared.errors { error_message, is_unauthorized }
+import from .status { energy_notice }
 
 glob PlannerCtx = createContext(None);
 
@@ -22,13 +23,22 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
     has loading: bool = True;
     has failure: str = "";
     has breakdown_draft: BreakdownDraft | None = None;
+    has energyNotice: str = "";
     nav = useNavigate();
 
     def keepBreakdownDraft(draft: BreakdownDraft) {
         breakdown_draft = draft;
     }
 
-    async def refreshToday -> None {
+    """Task ids on today's plan from now on: Up next and the rest of today's queue."""
+    def plannedIds(view: TodayView | None) -> list[str] {
+        if view is None or view.up_next is None {
+            return [];
+        }
+        return [view.up_next.item.task_id] + [item.task_id for item in view.queue];
+    }
+
+    async def refreshToday -> TodayView | None {
         latest: TodayView | None = None;
         try {
             latest = await get_today();
@@ -36,18 +46,21 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
             if is_unauthorized(err) {
                 jacLogout();
                 nav("/login", {"replace": True});
-                return;
+                return None;
             }
             failure = error_message(err);
             loading = False;
-            return;
+            return None;
         }
         today = latest;
         failure = "";
         loading = False;
+        return latest;
     }
 
     async def changeEnergy(level: str) -> None {
+        before = plannedIds(today);
+        energyNotice = "";
         result: ProfileResult | None = None;
         try {
             result = await set_energy(level);
@@ -59,7 +72,10 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
             failure = result.error;
             return;
         }
-        await refreshToday();
+        latest = await refreshToday();
+        if latest is not None {
+            energyNotice = energy_notice(level, before, plannedIds(latest));
+        }
     }
 
     async can with entry {
@@ -74,7 +90,9 @@ def:pub PlannerProvider(children: any = None) -> JsxElement {
         "refreshToday": refreshToday,
         "changeEnergy": changeEnergy,
         "breakdownDraft": breakdown_draft,
-        "keepBreakdownDraft": keepBreakdownDraft
+        "keepBreakdownDraft": keepBreakdownDraft,
+        "energyNotice": energyNotice,
+        "dismissEnergyNotice": lambda { energyNotice = ""; }
     };
     <PlannerCtx.Provider value={value}>{children}</PlannerCtx.Provider>
 }

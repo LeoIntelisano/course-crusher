@@ -58,6 +58,7 @@ def rules_for(profile: Profile) -> PlanRules {
         deep_work_cutoff=parse_clock(profile.deep_work_cutoff, "Deep Work cutoff"),
         buffer_minutes=profile.buffer_minutes,
         min_slot_minutes=profile.min_slot_minutes,
-        energy=Energy(profile.energy)
+        energy=Energy(profile.energy),
+        spread_long_deadlines=True
     );
 }

@@ -133,3 +133,33 @@ test "proposed work is planned around what is already in the plan" {
 
     assert preview.blocks[0].when_label == "Today 10:00 AM";
 }
+
+test "calendar review groups proposed tasks into their local weekdays" {
+    blocks = [
+        FitBlock(position=1, title="Outline", tier="Deep Work", minutes=45, placed=True, when_label="Mon 10:00 AM", start=at(10, day_offset=0).isoformat()),
+        FitBlock(position=2, title="Draft", tier="Deep Work", minutes=90, placed=True, when_label="Wed 1:00 PM", start=at(13, day_offset=2).isoformat())
+    ];
+    weeks = review_calendar(blocks, DETROIT);
+    assert len(weeks) == 1;
+    assert len(weeks[0]) == 7;
+    assert [block.title for block in weeks[0][0].blocks] == ["Outline"];
+    assert len(weeks[0][1].blocks) == 0;
+    assert [block.title for block in weeks[0][2].blocks] == ["Draft"];
+}
+
+test "calendar review excludes unplaced work from day cells" {
+    blocks = [FitBlock(position=1, title="No room", tier="Deep Work", minutes=90, placed=False, when_label="No slot this week")];
+    assert review_calendar(blocks, DETROIT) == [];
+}
+
+
+test "calendar preview includes unsaved tasks and existing class events" {
+    busy = [CalendarEvent(title="EECS 445 Lecture", start=at(11), end=at(12), source="class")];
+    steps = proposed([("Solve ML homework", CognitiveTier.DEEP_WORK, 30)], at(23, 59, 2));
+    preview = fit_view(empty_inputs(busy, []), "ML", at(23, 59, 2), steps, at(8));
+    assert len(preview.review_views) == 1;
+    day = preview.review_views[0].days[0];
+    assert len([item for item in day.items if item.kind == "class"]) == 1;
+    assert len([item for item in day.items if item.kind == "preview"]) == 1;
+    assert preview.blocks[0].placed;
+}

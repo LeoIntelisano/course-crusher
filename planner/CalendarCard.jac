@@ -36,6 +36,9 @@ glob POPOVER: str = "fixed inset-x-3 bottom-[84px] z-30 rounded-lg border border
 
 """Course color for course events; tier color plus a course-colored edge for planned blocks."""
 def item_style(item: CalendarItem) -> str {
+    if item.kind == "preview" {
+        return ITEM_TIER[tier_key(item.tier)] + " ring-2 ring-brand/50";
+    }
     if item.kind == "task" {
         return ITEM_TIER[tier_key(item.tier)] + " " + COURSE_ACCENT.get(item.color, "");
     }
@@ -64,10 +67,10 @@ def:pub BlockText(item: CalendarItem) -> JsxElement {
 }
 
 """One block. Named Google events are buttons that open the course picker."""
-def:pub CalendarBlock(item: CalendarItem, gridStart: int, active: bool, onPick: Callable[[CalendarItem], None]) -> JsxElement {
+def:pub CalendarBlock(item: CalendarItem, gridStart: int, active: bool, onPick: Callable[[CalendarItem], None], readonly: bool = False) -> JsxElement {
     box = item_box(item.start_minute, item.end_minute, gridStart, item.lane, item.lanes);
     label = item.title + " · " + item.detail;
-    if item.linkable {
+    if item.linkable and not readonly {
         return <button
             type="button"
             aria-expanded={active}
@@ -203,7 +206,8 @@ def:pub DayBody(
     onPick: Callable[[CalendarItem], None],
     onLink: Callable[[str, str], None],
     onUnlink: Callable[[str], None],
-    onClose: Callable[[], None]
+    onClose: Callable[[], None],
+    readonly: bool = False
 ) -> JsxElement {
     picked_key = picked.key if picked is not None else "";
     here = [i for i in day.items if i.key == picked_key];
@@ -214,7 +218,7 @@ def:pub DayBody(
             <div key={f"{day.iso_date}-h{hour}"} className="absolute inset-x-0 border-t border-line/70" style={{"top": f"{grid_height(view.start_minute, hour * 60)}px"}}></div>
         }}
         {for item in day.items {
-            <CalendarBlock key={item.key} item={item} gridStart={view.start_minute} active={item.key == picked_key} onPick={onPick} />
+            <CalendarBlock key={item.key} item={item} gridStart={view.start_minute} active={item.key == picked_key} onPick={onPick} readonly={readonly} />
         }}
         {line >= 0 and <div className="absolute inset-x-0 z-10 border-t-2 border-danger" style={{"top": f"{line}px"}} aria-label="Now"></div>}
         {if len(here) > 0 {
@@ -242,7 +246,8 @@ def:pub WeekGrid(
     onPick: Callable[[CalendarItem], None],
     onLink: Callable[[str, str], None],
     onUnlink: Callable[[str], None],
-    onClose: Callable[[], None]
+    onClose: Callable[[], None],
+    readonly: bool = False
 ) -> JsxElement {
     has_all_day = len([d for d in view.days if len(d.all_day) > 0]) > 0;
     <div className="px-2 pt-2 pb-3 desk:px-4">
@@ -281,6 +286,7 @@ def:pub WeekGrid(
                     onLink={onLink}
                     onUnlink={onUnlink}
                     onClose={onClose}
+                    readonly={readonly}
                 />
             }}
         </div>

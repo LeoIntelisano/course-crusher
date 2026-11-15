@@ -75,3 +75,21 @@ test "adding a blank row appends without touching the original" {
 test "adding to an empty list starts a by-hand breakdown" {
     assert [row.minutes for row in add_blank_row([])] == [30];
 }
+
+test "manually scheduled dates survive all subtask edits" {
+    original = redate_row(rows(), 0, "2026-11-20");
+    original = reclock_row(original, 0, "14:30");
+    assert manual_starts(original) == ["2026-11-20T14:30", ""];
+    assert retitle_row(original, 0, "New title")[0].scheduled_time == "14:30";
+    assert retier_row(original, 0, "Low Energy")[0].scheduled_date == "2026-11-20";
+    assert retime_row(original, 0, "45")[0].scheduled_time == "14:30";
+    assert not toggle_row(original, 0)[0].included;
+    assert manual_starts(toggle_row(original, 0)) == [""];
+}
+
+test "incomplete manual dates are reported" {
+    only_date = redate_row(rows(), 1, "2026-11-20");
+    assert invalid_schedule_row(only_date) == 2;
+    filled = reclock_row(only_date, 1, "12:00");
+    assert invalid_schedule_row(filled) == 0;
+}

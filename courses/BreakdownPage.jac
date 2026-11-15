@@ -14,6 +14,7 @@ import from .BreakdownCards {
     ScheduleReview,
     SubtaskRow,
     approved_starts,
+    proposed_starts,
     when_labels
 }
 import from .drafts {
@@ -23,6 +24,11 @@ import from .drafts {
     course_to_select,
     default_title,
     included_rows,
+    invalid_schedule_row,
+    manual_starts,
+    auto_schedule_row,
+    set_date_from_suggestion,
+    set_time_from_suggestion,
     is_blank,
     retier_row,
     retime_row,
@@ -188,6 +194,7 @@ def:pub BreakdownPage -> JsxElement {
     chosen = [c for c in courses if c.id == course_id];
     course_code = chosen[0].code if chosen else "";
     labels = when_labels(rows, preview);
+    suggestions = proposed_starts(rows, preview);
     adding = len(included_rows(rows));
     has_courses = len(courses) > 0;
     blank = is_blank(currentDraft());
@@ -313,11 +320,15 @@ def:pub BreakdownPage -> JsxElement {
                                 row={row}
                                 index={index}
                                 when={labels[index]}
+                                proposed_start={suggestions[index]}
                                 editing={editing}
                                 onToggle={toggle}
                                 onTitle={lambda (i: int, value: str) { rows = retitle_row(rows, i, value); }}
                                 onTier={lambda (i: int, value: str) { rows = retier_row(rows, i, value); }}
                                 onMinutes={lambda (i: int, value: str) { rows = retime_row(rows, i, value); }}
+                                onDate={lambda (i: int, value: str) { rows = set_date_from_suggestion(rows, i, value, suggestions[i]); }}
+                                onTime={lambda (i: int, value: str) { rows = set_time_from_suggestion(rows, i, value, suggestions[i]); }}
+                                onAuto={lambda (i: int) { rows = auto_schedule_row(rows, i); refreshFit(rows); }}
                             />
                         }}
                     </div>

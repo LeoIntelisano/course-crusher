@@ -454,3 +454,145 @@ test "the cap only applies to today" {
 
     assert sorted([s[0] for s in spans(plan).values()]) == [at(8, 0, 1), at(9, 0, 1), at(10, 0, 1)];
 }
+
+test "rescheduled task does not overlap existing assignments" {
+    now = datetime(2026, 11, 16, 9, 0, tzinfo=timezone.utc);
+    rules = PlanRules(zone=timezone.utc, buffer_minutes=0);
+
+    tasks = [
+        PlanTask(
+            task_id="assignment_a",
+            title="Assignment A",
+            tier=CognitiveTier.DEEP_WORK,
+            minutes=60,
+            group_id="a",
+            fixed_start=datetime(2026, 11, 16, 10, 0, tzinfo=timezone.utc)
+        ),
+        PlanTask(
+            task_id="assignment_c",
+            title="Assignment C",
+            tier=CognitiveTier.DEEP_WORK,
+            minutes=60,
+            group_id="c",
+            fixed_start=datetime(2026, 11, 16, 11, 0, tzinfo=timezone.utc)
+        ),
+        PlanTask(
+            task_id="assignment_b",
+            title="Rescheduled Assignment B",
+            tier=CognitiveTier.DEEP_WORK,
+            minutes=60,
+            group_id="b",
+            not_before=datetime(2026, 11, 16, 10, 30, tzinfo=timezone.utc)
+        )
+    ];
+
+    plan = plan_tasks(tasks, [], [], rules, now);
+
+    assert len(plan.placements) == 3;
+
+    a = placement_for(plan, "assignment_a");
+    b = placement_for(plan, "assignment_b");
+    c = placement_for(plan, "assignment_c");
+
+    assert a is not None;
+    assert b is not None;
+    assert c is not None;
+
+    # Assignment B must avoid both existing assignments.
+    assert b.start >= c.end;
+
+    # No two scheduled assignments may overlap.
+    for (i, first) in enumerate(plan.placements) {
+        for second in plan.placements[i + 1:] {
+            assert first.end <= second.start or second.end <= first.start, (
+                f"Overlap: {first.task_id} and {second.task_id}"
+            );
+        }
+    }
+}
+
+
+test "long-deadline assignment is spaced across the week when enabled" {
+    due = at(20, 0, 7);
+    steps = [
+        task("one", 60, group_id="essay", order=1, due=due),
+        task("two", 60, group_id="essay", order=2, due=due),
+        task("three", 60, group_id="essay", order=3, due=due),
+        task("four", 60, group_id="essay", order=4, due=due)
+    ];
+    spread_rules = PlanRules(zone=DETROIT, horizon_days=7, buffer_minutes=0, spread_long_deadlines=True);
+    plan = plan_tasks(steps, [], [], spread_rules, at(8));
+    assert [spans(plan)[key][0].date() for key in ["one", "two", "three", "four"]] == [
+        TUESDAY, TUESDAY + timedelta(days=2), TUESDAY + timedelta(days=4), TUESDAY + timedelta(days=6)
+    ];
+    assert plan.late == [] and plan.unplaced == [];
+}
+
+test "urgent deadline still uses earliest available time" {
+    due = at(20, 0, 1);
+    steps = [
+        task("first", 60, group_id="urgent", order=1, due=due),
+        task("second", 60, group_id="urgent", order=2, due=due)
+    ];
+    spread_rules = PlanRules(zone=DETROIT, horizon_days=7, buffer_minutes=0, spread_long_deadlines=True);
+    plan = plan_tasks(steps, [], [], spread_rules, at(8));
+    assert spans(plan)["first"][0] == at(8);
+    assert spans(plan)["second"][0] == at(9);
+}
+
+test "spreading falls back to earlier available days when the preferred day is booked" {
+    due = at(20, 0, 7);
+    steps = [
+        task("first", 60, group_id="essay", order=1, due=due),
+        task("second", 60, group_id="essay", order=2, due=due)
+    ];
+    # The second step prefers day 6, but that whole day is unavailable.
+    busy = [event("Booked", at(8, 0, 6), at(22, 0, 6))];
+    spread_rules = PlanRules(zone=DETROIT, horizon_days=7, buffer_minutes=0, spread_long_deadlines=True);
+    plan = plan_tasks(steps, busy, [], spread_rules, at(8));
+    assert spans(plan)["second"][0] == at(8, 0, 5);
+    assert plan.unplaced == [];
+}
+
+
+test "spread scheduling counts already planned work from other assignments" {
+    due = at(20, 0, 7);
+    projects = [
+        task("a1", 90, group_id="a", order=1, due=due),
+        task("a2", 90, group_id="a", order=2, due=due),
+        task("b1", 90, group_id="b", order=1, due=due),
+        task("b2", 90, group_id="b", order=2, due=due)
+    ];
+    spread_rules = PlanRules(zone=DETROIT, horizon_days=7, buffer_minutes=0, spread_long_deadlines=True);
+    plan = plan_tasks(projects, [], [], spread_rules, at(8));
+    scheduled = spans(plan);
+    # Both assignments should not be forced onto the first day.
+    assert scheduled["a1"][0].date() != scheduled["b1"][0].date();
+    assert plan.unplaced == [] and plan.late == [];
+    for (index, first) in enumerate(plan.placements) {
+        for second in plan.placements[index + 1:] {
+            assert first.end <= second.start or second.end <= first.start;
+        }
+    }
+}
+
+test "busy class and protected days influence spacing without overlapping" {
+    due = at(20, 0, 7);
+    tasks = [
+        task("one", 60, group_id="lab", order=1, due=due),
+        task("two", 60, group_id="lab", order=2, due=due),
+        task("three", 60, group_id="lab", order=3, due=due)
+    ];
+    # Middle task would normally prefer day 3; that day is fully booked.
+    events = [event("All-day commitments", at(8, 0, 3), at(22, 0, 3))];
+    protected = [ProtectedHours(label="Dinner", start=time(18), end=time(19))];
+    spread_rules = PlanRules(zone=DETROIT, horizon_days=7, buffer_minutes=0, spread_long_deadlines=True);
+    plan = plan_tasks(tasks, events, protected, spread_rules, at(8));
+    scheduled = spans(plan);
+    assert scheduled["two"][0].date() != TUESDAY + timedelta(days=3);
+    assert plan.unplaced == [] and plan.late == [];
+    for placement in plan.placements {
+        assert placement.end <= due;
+        assert not (at(8, 0, 3) < placement.end and placement.start < at(22, 0, 3));
+    }
+}

@@ -101,6 +101,12 @@ impl BreakdownPage.refreshFit(next_rows: list[DraftRow]) -> None {
     fit_request = fit_request + 1;
     request = fit_request;
     chosen_rows = included_rows(next_rows);
+    incomplete = invalid_schedule_row(next_rows);
+    if incomplete > 0 {
+        preview = None;
+        failure = f"Subtask {incomplete}: choose both a date and start time, or clear both.";
+        return;
+    }
     if not chosen_rows {
         preview = None;
         return;
@@ -111,7 +117,7 @@ impl BreakdownPage.refreshFit(next_rows: list[DraftRow]) -> None {
     ];
     result: FitResult | None = None;
     try {
-        result = await preview_fit(default_title(title, source), due_at, drafts);
+        result = await preview_fit(default_title(title, source), due_at, drafts, manual_starts(next_rows));
     } except Exception as err {
         if request == fit_request {
             preview = None;
@@ -124,6 +130,7 @@ impl BreakdownPage.refreshFit(next_rows: list[DraftRow]) -> None {
     }
     if result and result.ok {
         preview = result.preview;
+        failure = "";
     } else {
         preview = None;
         failure = result.error if result else "";
@@ -138,6 +145,10 @@ impl BreakdownPage.addToPlan -> None {
     chosen_rows = included_rows(rows);
     if not chosen_rows {
         failure = "Select at least one subtask to add.";
+        return;
+    }
+    if preview is None {
+        failure = "Review a valid schedule before approving it.";
         return;
     }
     saving = True;

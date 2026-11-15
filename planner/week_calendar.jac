@@ -14,6 +14,8 @@ import from planner.inputs { AllDayEvent, CourseChoice, PlanningInputs }
 import from scheduling.planner {
     CalendarEvent,
     PlanRules,
+    PlanTask,
+    Placement,
     ProtectedHours,
     at_local,
     local_day,
@@ -224,12 +226,53 @@ def round_up_hour(minute: int) -> int {
     return min(MINUTES_PER_DAY, -(-minute // MINUTES_PER_HOUR) * MINUTES_PER_HOUR);
 }
 
-def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> CalendarView {
+"""Render existing tasks and unapproved preview tasks with the same calendar geometry."""
+def plan_item(
+    placement: Placement,
+    day: date,
+    inputs: PlanningInputs,
+    proposed: dict[str, PlanTask]
+) -> CalendarItem {
+    rules = inputs.rules;
+    is_preview = placement.task_id in proposed;
+    if is_preview {
+        task = proposed[placement.task_id];
+        title = task.title;
+        tier = str(task.tier);
+        course_code = "";
+    } else {
+        info = inputs.info[placement.task_id];
+        title = info.title;
+        tier = info.tier;
+        course_code = info.course_code;
+    }
+    return CalendarItem(
+        key=f"{'preview' if is_preview else 'task'}-{placement.task_id}",
+        kind="preview" if is_preview else "task",
+        title=title,
+        detail=range_label(placement.start.astimezone(rules.zone), placement.end.astimezone(rules.zone)) + (" · Proposed" if is_preview else f" · {course_code}"),
+        start_minute=minute_of_day(placement.start, day, rules),
+        end_minute=minute_of_day(placement.end, day, rules),
+        course_code=course_code,
+        tier=tier,
+        color=inputs.colors.get(course_code, "")
+    );
+}
+
+"""Current calendar or a read-only preview with unsaved proposed tasks included."""
+def calendar_view(
+    inputs: PlanningInputs,
+    now: datetime,
+    week_offset: int,
+    proposed: list[PlanTask] | None = None
+) -> CalendarView {
     rules = inputs.rules;
     offset = clamp_offset(week_offset);
     first = week_start(now, rules, offset);
     today = local_day(now, rules.zone);
-    plan = plan_tasks(inputs.tasks, inputs.events, inputs.protected, rules, now);
+    additions = proposed if proposed is not None else [];
+    plan = plan_tasks(inputs.tasks + additions, inputs.events, inputs.protected, rules, now);
+    proposed_map = {task.task_id: task for task in additions};
     days: list[CalendarDay] = [];
     for day in [first + timedelta(days=n) for n in range(DAYS_PER_WEEK)] {
         pieces = [
@@ -242,17 +285,7 @@ def calendar_view(inputs: PlanningInputs, now: datetime, week_offset: int) -> Ca
         ];
         protected = [protected_item(block, day, n) for (n, block) in enumerate(inputs.protected)];
         tasks = [
-            CalendarItem(
-                key=f"task-{p.task_id}",
-                kind="task",
-                title=inputs.info[p.task_id].title,
-                detail=f"{range_label(p.start.astimezone(rules.zone), p.end.astimezone(rules.zone))} · {inputs.info[p.task_id].course_code}",
-                start_minute=minute_of_day(p.start, day, rules),
-                end_minute=minute_of_day(p.end, day, rules),
-                course_code=inputs.info[p.task_id].course_code,
-                tier=inputs.info[p.task_id].tier,
-                color=inputs.colors.get(inputs.info[p.task_id].course_code, "")
-            )
+            plan_item(p, day, inputs, proposed_map)
             for p in plan.placements
             if local_day(p.start, rules.zone) == day
         ];

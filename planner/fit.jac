@@ -4,8 +4,9 @@ The proposed subtasks are planned alongside everything already in the plan, so
 the preview shows the slots they would really get. Nothing is stored.
 """
 
-import from datetime { date, datetime, tzinfo }
+import from datetime { date, datetime, timedelta, tzinfo }
 import from planner.inputs { PlanningInputs }
+import from planner.week_calendar { CalendarView, calendar_view, week_start }
 import from scheduling.planner {
     PlanGroup,
     PlanTask,
@@ -46,12 +47,53 @@ obj FitDay {
     has tier: str;
 }
 
+"""A day in the proposed schedule calendar, including days with no new work."""
+obj ReviewDay {
+    has date_key: str;
+    has label: str;
+    has blocks: list[FitBlock];
+}
+
 obj FitPreview {
     has blocks: list[FitBlock];
     has days: list[FitDay];
     has checks: list[CheckView];
     has range_label: str;
     has buffer_label: str;
+    has calendar_weeks: list[list[ReviewDay]] = [];
+    has review_views: list[CalendarView] = [];
+}
+
+"""Group proposed starts by local calendar week, Monday through Sunday."""
+def review_calendar(blocks: list[FitBlock], zone: tzinfo) -> list[list[ReviewDay]] {
+    dated: list[tuple[date, FitBlock]] = [
+        (datetime.fromisoformat(block.start).astimezone(zone).date(), block)
+        for block in blocks if block.placed and block.start
+    ];
+    if not dated {
+        return [];
+    }
+    first = min([day for (day, _) in dated]);
+    last = max([day for (day, _) in dated]);
+    first_monday = first - timedelta(days=first.weekday());
+    last_sunday = last + timedelta(days=6 - last.weekday());
+    weeks: list[list[ReviewDay]] = [];
+    day = first_monday;
+    while day <= last_sunday {
+        week: list[ReviewDay] = [];
+        for offset in range(7) {
+            current = day + timedelta(days=offset);
+            matching = [block for (placed_day, block) in dated if placed_day == current];
+            week = week + [ReviewDay(
+                date_key=current.isoformat(),
+                label=f"{current.strftime('%a %b')} {current.day}",
+                blocks=matching
+            )];
+        }
+        weeks = weeks + [week];
+        day = day + timedelta(days=7);
+    }
+    return weeks;
 }
 
 def preview_id(position: int) -> str {
@@ -126,11 +168,21 @@ def fit_view(
     }
     groups = inputs.groups + [PlanGroup(group_id=PREVIEW_GROUP, label=label or "This assignment", due=due)];
     checks = plan_checks(plan, tasks, inputs.events, groups, PREVIEW_GROUP, rules);
+    weeks = review_calendar(blocks, rules.zone);
+    monday = week_start(now, rules, 0);
+    offsets = [
+        (date.fromisoformat(week[0].date_key) - monday).days // 7
+        for week in weeks
+    ];
+    # Build the SAME calendar as Today, but include proposed unsaved blocks.
+    review_views = [calendar_view(inputs, now, offset, proposed) for offset in offsets];
     return FitPreview(
         blocks=blocks,
         days=days,
         checks=[CheckView(level=str(c.level), message=c.message) for c in checks],
         range_label=range_label,
-        buffer_label=buffer_label
+        buffer_label=buffer_label,
+        calendar_weeks=weeks,
+        review_views=review_views
     );
 }

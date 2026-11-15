@@ -15,6 +15,8 @@ obj DraftRow {
     has tier: str;
     has minutes: int;
     has included: bool = True;
+    has scheduled_date: str = "";
+    has scheduled_time: str = "";
 }
 
 """Everything on Breakdown that isn't saved yet, kept while the student visits other screens."""
@@ -75,17 +77,17 @@ def with_row(rows: list[DraftRow], index: int, replacement: DraftRow) -> list[Dr
 
 def toggle_row(rows: list[DraftRow], index: int) -> list[DraftRow] {
     row = rows[index];
-    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=not row.included));
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=not row.included, scheduled_date=row.scheduled_date, scheduled_time=row.scheduled_time));
 }
 
 def retitle_row(rows: list[DraftRow], index: int, title: str) -> list[DraftRow] {
     row = rows[index];
-    return with_row(rows, index, DraftRow(title=title, tier=row.tier, minutes=row.minutes, included=row.included));
+    return with_row(rows, index, DraftRow(title=title, tier=row.tier, minutes=row.minutes, included=row.included, scheduled_date=row.scheduled_date, scheduled_time=row.scheduled_time));
 }
 
 def retier_row(rows: list[DraftRow], index: int, tier: str) -> list[DraftRow] {
     row = rows[index];
-    return with_row(rows, index, DraftRow(title=row.title, tier=tier, minutes=row.minutes, included=row.included));
+    return with_row(rows, index, DraftRow(title=row.title, tier=tier, minutes=row.minutes, included=row.included, scheduled_date=row.scheduled_date, scheduled_time=row.scheduled_time));
 }
 
 """Typed minutes, clamped to what the server accepts. Blank or junk keeps the old value."""
@@ -101,10 +103,60 @@ def retime_row(rows: list[DraftRow], index: int, text: str) -> list[DraftRow] {
         return rows;
     }
     minutes = min(MAX_DRAFT_MINUTES, max(1, int(cleaned)));
-    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=minutes, included=row.included));
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=minutes, included=row.included, scheduled_date=row.scheduled_date, scheduled_time=row.scheduled_time));
 }
 
 """A new, empty subtask at the end, for breaking an assignment down by hand."""
 def add_blank_row(rows: list[DraftRow]) -> list[DraftRow] {
     return rows + [DraftRow(title="", tier=BLANK_ROW_TIER, minutes=BLANK_ROW_MINUTES)];
+}
+
+"""Keep the student's optional local date and time together with each editable row."""
+def redate_row(rows: list[DraftRow], index: int, value: str) -> list[DraftRow] {
+    row = rows[index];
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included, scheduled_date=value, scheduled_time=row.scheduled_time));
+}
+
+def reclock_row(rows: list[DraftRow], index: int, value: str) -> list[DraftRow] {
+    row = rows[index];
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included, scheduled_date=row.scheduled_date, scheduled_time=value));
+}
+
+"""Local datetime strings, positionally matching included subtasks, or empty for automatic planning."""
+def manual_starts(rows: list[DraftRow]) -> list[str] {
+    return [f"{row.scheduled_date}T{row.scheduled_time}" if row.scheduled_date and row.scheduled_time else "" for row in included_rows(rows)];
+}
+
+"""Reject incomplete selections before previewing, rather than silently ignoring them."""
+def invalid_schedule_row(rows: list[DraftRow]) -> int {
+    for (index, row) in enumerate(rows) {
+        if row.included and bool(row.scheduled_date) != bool(row.scheduled_time) {
+            return index + 1;
+        }
+    }
+    return 0;
+}
+
+"""Turning a planner suggestion into a manual start should preserve the other field."""
+def set_date_from_suggestion(rows: list[DraftRow], index: int, value: str, suggested: str) -> list[DraftRow] {
+    row = rows[index];
+    if not value {
+        return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included));
+    }
+    clock = row.scheduled_time or (suggested.split("T")[1][:5] if "T" in suggested else "");
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included, scheduled_date=value, scheduled_time=clock));
+}
+
+def set_time_from_suggestion(rows: list[DraftRow], index: int, value: str, suggested: str) -> list[DraftRow] {
+    row = rows[index];
+    if not value {
+        return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included));
+    }
+    day = row.scheduled_date or (suggested.split("T")[0] if suggested else "");
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included, scheduled_date=day, scheduled_time=value));
+}
+
+def auto_schedule_row(rows: list[DraftRow], index: int) -> list[DraftRow] {
+    row = rows[index];
+    return with_row(rows, index, DraftRow(title=row.title, tier=row.tier, minutes=row.minutes, included=row.included));
 }

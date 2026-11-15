@@ -12,7 +12,9 @@ Rules, in the order they are applied:
    `min_slot_minutes` are dropped, as in `find_free_slots`.
 2. Tasks are placed earliest deadline first. Tasks of one assignment keep their
    breakdown order and never start before the previous one ends.
-3. Each task goes into the earliest gap it fits whole; tasks are never split.
+3. For non-urgent multi-step assignments, spread steps across days while taking
+   daily workload, classes, calendar events and protected time into account.
+   Urgent tasks use earliest-fit; no task is split.
 4. Deep Work must end by `deep_work_cutoff`, so it stays off late nights.
 5. Energy sets how much Deep Work fits in the rest of today: no cap at High,
    `MEDIUM_DEEP_WORK_MINUTES` at Medium, none at Low. Deep Work due today or
@@ -88,6 +90,7 @@ obj PlanRules {
     has min_slot_minutes: int = DEFAULT_MIN_SLOT_MINUTES;
     has horizon_days: int = DEFAULT_HORIZON_DAYS;
     has energy: Energy = Energy.HIGH;
+    has spread_long_deadlines: bool = False;
 }
 
 """Where a task landed. `fixed` means it kept the time the student approved."""
@@ -342,6 +345,115 @@ def earliest_start(task: PlanTask, now: datetime, ready: dict[str, datetime]) ->
     return max(candidates);
 }
 
+"""Preferred start for one step of a non-urgent assignment.
+
+Distribute its steps over available days up to the day before its deadline.
+Only a preference: if the preferred slot cannot fit before the deadline,
+the caller falls back to earliest-fit. No manual times are changed.
+"""
+def spread_start(
+    task: PlanTask, tasks: list[PlanTask], rules: PlanRules, now: datetime
+) -> datetime | None {
+    if not rules.spread_long_deadlines or not task.group_id or task.due is None {
+        return None;
+    }
+    today = local_day(now, rules.zone);
+    remaining = (local_day(task.due, rules.zone) - today).days;
+    if remaining < 3 {
+        return None;
+    }
+    group = sorted(
+        [t for t in tasks if t.group_id == task.group_id],
+        key=lambda (t: PlanTask) -> tuple[int, str] { return (t.order, t.task_id); }
+    );
+    if len(group) < 2 {
+        return None;
+    }
+    position = [t.task_id for t in group].index(task.task_id);
+    last_offset = min(rules.horizon_days - 1, remaining - 1);
+    offset = (position * last_offset) // (len(group) - 1);
+    return at_local(today + timedelta(days=offset), rules.day_start, rules.zone);
+}
+
+"""Minutes already committed to a day, including classes and protected blocks.
+
+This affects which *free* day is preferred, never whether a slot is legal:
+`free_gaps` and `fit_in_gap` still enforce the hard constraints.
+"""
+def day_commitment_minutes(
+    day: date, events: list[CalendarEvent], protected: list[ProtectedHours], rules: PlanRules
+) -> int {
+    window_start = at_local(day, rules.day_start, rules.zone);
+    window_end = at_local(day, rules.day_end, rules.zone);
+    total = 0;
+    for event in events {
+        start = max(event.start, window_start);
+        end = min(event.end, window_end);
+        if start < end {
+            total = total + int((end - start).total_seconds() / 60);
+        }
+    }
+    for block in protected {
+        start = max(at_local(day, block.start, rules.zone), window_start);
+        end = min(at_local(day, block.end, rules.zone), window_end);
+        if start < end {
+            total = total + int((end - start).total_seconds() / 60);
+        }
+    }
+    return total;
+}
+
+"""Prefer a spread-out day that isn't already overloaded.
+
+A target date preserves the assignment's breakdown order. Nearby days can
+win when classes, other assignments, or protected hours make the target busy.
+Only candidate slots that fit *before* the deadline are considered.
+"""
+def balanced_fit(
+    task: PlanTask,
+    gaps: list[TimeSlot],
+    earliest: datetime,
+    rules: PlanRules,
+    today: date,
+    deep_used: int,
+    target: datetime,
+    placements: list[Placement],
+    events: list[CalendarEvent],
+    protected: list[ProtectedHours]
+) -> tuple[int, datetime] | None {
+    target_day = local_day(target, rules.zone);
+    work_by_day: dict[date, int] = {};
+    for placement in placements {
+        day = local_day(placement.start, rules.zone);
+        work_by_day[day] = work_by_day.get(day, 0) + int((placement.end - placement.start).total_seconds() / 60);
+    }
+    best: tuple[int, datetime] | None = None;
+    best_score: float | None = None;
+    for (index, gap) in enumerate(gaps) {
+        start = fit_in_gap(task, gap, earliest, rules, today, deep_used);
+        if start is None {
+            continue;
+        }
+        if task.due is not None and start + timedelta(minutes=task.minutes) > task.due {
+            continue;
+        }
+        day = local_day(start, rules.zone);
+        # A day's work load is more important than a small deviation from the
+        # preferred date. Fixed events and protected time also count.
+        distance = abs((day - target_day).days);
+        score = (
+            float(distance * 70)
+            + float(work_by_day.get(day, 0))
+            + 0.35 * float(day_commitment_minutes(day, events, protected, rules))
+        );
+        if best_score is None or score < best_score {
+            best_score = score;
+            best = (index, start);
+        }
+    }
+    return best;
+}
+
 """Place every task; see the module docstring for the rules."""
 def plan_tasks(
     tasks: list[PlanTask],
@@ -372,7 +484,17 @@ def plan_tasks(
             continue;
         }
         earliest = earliest_start(task, now, ready);
-        spot = first_fit(task, gaps, earliest, rules, today, deep_used);
+        preferred = spread_start(task, tasks, rules, now);
+        spot = None;
+        if preferred is not None {
+            spot = balanced_fit(
+                task, gaps, earliest, rules, today, deep_used, preferred,
+                placements, events, protected
+            );
+        }
+        if spot is None {
+            spot = first_fit(task, gaps, earliest, rules, today, deep_used);
+        }
         if spot is None {
             unplaced = unplaced + [task.task_id];
             if task.group_id {

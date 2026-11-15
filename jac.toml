@@ -52,6 +52,11 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 [client.app_meta_data]
 title = "CourseCrusher"
 description = "Breaks assignments into subtasks and fits them into your free time"
+# Home-screen install on phones: files live in public/ (served by plain `jac run` and builds).
+theme_color = "#ffffff"
+manifest = "/manifest.webmanifest"
+icon = "/icon.svg"
+apple_touch_icon = "/apple-touch-icon.png"
 
 # Bootstrap admin for /admin (logs, LLM telemetry). Set the password before any shared deploy.
 [scale.admin]

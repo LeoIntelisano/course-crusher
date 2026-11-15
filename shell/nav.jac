@@ -27,6 +27,11 @@ def is_current(item_path: str, path: str) -> bool {
     return path == item_path or path.startswith(item_path + "/");
 }
 
+"""Whether `path` is a Workspace screen, which the mobile tab bar reaches through More."""
+def in_workspace(path: str) -> bool {
+    return any([is_current(item.path, path) for item in WORKSPACE_NAV]);
+}
+
 def title_for(path: str) -> str {
     if path == "/welcome" {
         return "How it works";

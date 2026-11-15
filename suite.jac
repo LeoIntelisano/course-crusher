@@ -13,6 +13,7 @@ import from connections.google_link { calendar_status }
 import from connectors.canvas_assignments { convert_assignment }
 import from courses.drafts { DraftRow }
 import from courses.store { list_courses }
+import from planner.assistant { ask_planner }
 import from planner.grid { item_box }
 import from planner.service { get_today }
 import from shared.ai { failure_message }

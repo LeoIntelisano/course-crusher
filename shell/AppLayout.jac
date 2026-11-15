@@ -1,6 +1,7 @@
 """The signed-in frame: sidebar or tab bar, top bar, and the current screen."""
 
 import from "@jac/runtime" { Outlet, useLocation }
+import from .AssistantPanel { AssistantPanel }
 import from .nav { title_for }
 import from .PlannerContext { PlannerProvider, usePlanner }
 import from .Sidebar { Sidebar }
@@ -57,12 +58,13 @@ def:pub AppFrame -> JsxElement {
                 energy={today.energy}
                 onEnergy={onEnergy}
             />}
-            <main id="main" className="flex-1 overflow-auto px-3.5 pt-3.5 pb-[84px] desk:px-[22px] desk:pt-4 desk:pb-[18px]">
+            <main id="main" className="flex-1 overflow-auto px-3.5 pt-3.5 pb-[132px] desk:px-[22px] desk:pt-4 desk:pb-[80px]">
                 {ctx.failure and <div className="mb-3"><Notice tone="error" message={ctx.failure} /></div>}
                 <Outlet />
             </main>
         </div>
         <TabBar path={path} />
+        <AssistantPanel />
     </div>
 }
 

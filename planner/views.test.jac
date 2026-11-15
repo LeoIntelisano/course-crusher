@@ -236,3 +236,39 @@ test "busy-only Google blocks are drawn as busy" {
 
     assert (block.kind, block.title) == ("busy", "Busy");
 }
+
+"""Project 2 with the gradient-descent step approved for `start`."""
+def with_approved(start: datetime) -> PlanningInputs {
+    inputs = wireframe_inputs(project2_steps());
+    tasks = [
+        PlanTask(
+            task_id=t.task_id, title=t.title, tier=t.tier, minutes=t.minutes, group_id=t.group_id,
+            order=t.order, due=t.due, fixed_start=start if t.task_id == "gd" else None
+        )
+        for t in inputs.tasks
+    ];
+    return PlanningInputs(
+        rules=inputs.rules, display_name=inputs.display_name, tasks=tasks, info=inputs.info,
+        events=inputs.events, protected=inputs.protected, groups=inputs.groups,
+        calendar=inputs.calendar, course_count=inputs.course_count
+    );
+}
+
+test "an approved block that ended today is listed for closing out" {
+    week = week_view(with_approved(at(9)), at(12, 30));
+
+    assert [(i.task_id, i.range_label, i.approved) for i in week.ended_today] == [("gd", "9:00 – 9:50 AM", True)];
+}
+
+test "a block that hasn't ended yet isn't listed" {
+    assert week_view(with_approved(at(12)), at(12, 30)).ended_today == [];
+    assert week_view(with_approved(at(15)), at(12, 30)).ended_today == [];
+}
+
+test "yesterday's approved blocks aren't listed" {
+    assert week_view(with_approved(at(9, 0, -1)), at(12, 30)).ended_today == [];
+}
+
+test "auto-placed blocks are never listed" {
+    assert week_view(wireframe_inputs(project2_steps()), at(23)).ended_today == [];
+}

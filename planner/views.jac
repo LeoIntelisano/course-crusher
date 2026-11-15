@@ -103,10 +103,12 @@ obj DayPlan {
     has total_minutes: int;
 }
 
+"""`ended_today` holds approved blocks whose time passed today with the subtask still open."""
 obj WeekView {
     has days: list[DayPlan];
     has unplaced: list[PlanItem];
     has at_risk: int;
+    has ended_today: list[PlanItem] = [];
 }
 
 def by_start(p: Placement) -> datetime {
@@ -359,6 +361,31 @@ def today_view(inputs: PlanningInputs, now: datetime) -> TodayView {
     );
 }
 
+"""Approved blocks that ended earlier today and aren't marked done, earliest first.
+
+The planner re-places open work as time passes, so without this the block a
+student just worked through would quietly move to a later slot.
+"""
+def ended_today_items(inputs: PlanningInputs, now: datetime) -> list[PlanItem] {
+    rules = inputs.rules;
+    today = local_day(now, rules.zone);
+    ended: list[Placement] = [];
+    for task in inputs.tasks {
+        start = task.fixed_start;
+        if start is None {
+            continue;
+        }
+        end = start + timedelta(minutes=task.minutes);
+        if end <= now and local_day(start, rules.zone) == today {
+            ended = ended + [Placement(task_id=task.task_id, start=start, end=end, fixed=True)];
+        }
+    }
+    return [
+        plan_item(inputs.info[p.task_id], p, rules, today, set(), inputs.colors)
+        for p in sorted(ended, key=by_start)
+    ];
+}
+
 def week_view(inputs: PlanningInputs, now: datetime) -> WeekView {
     rules = inputs.rules;
     today = local_day(now, rules.zone);
@@ -382,6 +409,7 @@ def week_view(inputs: PlanningInputs, now: datetime) -> WeekView {
     return WeekView(
         days=days,
         unplaced=[unplaced_item(inputs.info[t], rules, today) for t in plan.unplaced],
-        at_risk=len(groups_at_risk(plan, inputs.tasks))
+        at_risk=len(groups_at_risk(plan, inputs.tasks)),
+        ended_today=ended_today_items(inputs, now)
     );
 }

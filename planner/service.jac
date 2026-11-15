@@ -24,6 +24,7 @@ import from scheduling.planner {
 import from shared.timefmt { parse_due, parse_zone }
 
 glob RESCHEDULE_FALLBACK_HOURS: int = 1;
+glob MAX_CLOSE_OUT: int = 50;
 
 obj FitResult {
     has ok: bool;
@@ -120,5 +121,35 @@ def:protect reschedule_task(task_id: str) -> ActionResult {
     after = current.end if current is not None else now + timedelta(hours=RESCHEDULE_FALLBACK_HOURS);
     task.not_before = after.isoformat();
     task.approved_start = "";
+    return ActionResult(ok=True);
+}
+
+"""Not yet: an approved block passed without the work getting done. Release its time so the planner re-places it."""
+def:protect release_task(task_id: str) -> ActionResult {
+    task = find_task(task_id);
+    if task is None {
+        return ActionResult(ok=False, error="That subtask no longer exists.");
+    }
+    task.approved_start = "";
+    return ActionResult(ok=True);
+}
+
+"""Close out several subtasks at once, e.g. everything Plan lists under "Earlier today"."""
+def:protect complete_tasks(task_ids: list[str]) -> ActionResult {
+    if not task_ids {
+        return ActionResult(ok=False, error="Pick at least one subtask to mark done.");
+    }
+    if len(task_ids) > MAX_CLOSE_OUT {
+        return ActionResult(ok=False, error=f"Mark at most {MAX_CLOSE_OUT} subtasks done at once.");
+    }
+    tasks = [task for task in [find_task(task_id) for task_id in task_ids] if task is not None];
+    if not tasks {
+        return ActionResult(ok=False, error="Those subtasks no longer exist.");
+    }
+    finished_at = utc_now().isoformat();
+    for task in tasks {
+        task.done = True;
+        task.completed_at = finished_at;
+    }
     return ActionResult(ok=True);
 }

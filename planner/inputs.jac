@@ -212,7 +212,8 @@ def with_horizon(rules: PlanRules, horizon_days: int) -> PlanRules {
         buffer_minutes=rules.buffer_minutes,
         min_slot_minutes=rules.min_slot_minutes,
         horizon_days=horizon_days,
-        energy=rules.energy
+        energy=rules.energy,
+        spread_long_deadlines=rules.spread_long_deadlines
     );
 }
 

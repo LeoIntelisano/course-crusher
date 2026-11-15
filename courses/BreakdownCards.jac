@@ -2,6 +2,8 @@
 
 import from .drafts { DraftRow }
 import from ..planner.fit { CheckView, FitBlock, FitDay, FitPreview }
+import from ..planner.CalendarCard { WeekGrid }
+import from ..planner.week_calendar { CalendarItem }
 import from ..shared.format { tier_key }
 import from ..shared.styles { BLOCK, CARD, FIELD_INLINE }
 import from ..shared.ui { CardHeader, EmptyState, PlainChip, TierChip }
@@ -9,16 +11,22 @@ import from ..shared.ui { CardHeader, EmptyState, PlainChip, TierChip }
 glob TIERS: list[str] = ["Deep Work", "Shallow Work", "Low Energy"];
 glob BOX_ON: str = "mt-0.5 grid h-[17px] w-[17px] flex-none place-items-center rounded-[5px] border-[1.5px] border-ink bg-ink text-[10px] text-white cursor-pointer";
 glob BOX_OFF: str = "mt-0.5 grid h-[17px] w-[17px] flex-none place-items-center rounded-[5px] border-[1.5px] border-line-strong bg-surface text-[10px] text-white cursor-pointer";
+glob DAY_TAB: str = "flex min-w-[44px] flex-col items-center rounded-sm border border-line px-2 py-1 text-[11px] font-semibold text-muted";
+glob DAY_TAB_ON: str = "flex min-w-[44px] flex-col items-center rounded-sm border border-ink bg-ink px-2 py-1 text-[11px] font-semibold text-white";
 
 def:pub SubtaskRow(
     row: DraftRow,
     index: int,
     when: str,
+    proposed_start: str,
     editing: bool,
     onToggle: Callable[[int], None],
     onTitle: Callable[[int, str], None],
     onTier: Callable[[int, str], None],
-    onMinutes: Callable[[int, str], None]
+    onMinutes: Callable[[int, str], None],
+    onDate: Callable[[int, str], None],
+    onTime: Callable[[int, str], None],
+    onAuto: Callable[[int], None]
 ) -> JsxElement {
     def handle_toggle(e: MouseEvent) {
         onToggle(index);
@@ -61,6 +69,30 @@ def:pub SubtaskRow(
                             value={str(row.minutes)}
                             onChange={lambda (e: ChangeEvent) { onMinutes(index, e.target.value); }}
                         />
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <label className="flex flex-col gap-1 text-[11px] text-muted">
+                            Scheduled date (optional)
+                            <input
+                                type="date"
+                                aria-label={f"Subtask {index + 1} scheduled date"}
+                                className={FIELD_INLINE + " min-w-[160px]"}
+                                value={row.scheduled_date or (proposed_start.split("T")[0] if proposed_start else "")}
+                                onChange={lambda (e: ChangeEvent) { onDate(index, e.target.value); }}
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] text-muted">
+                            Start time
+                            <input
+                                type="time"
+                                aria-label={f"Subtask {index + 1} start time"}
+                                className={FIELD_INLINE + " min-w-[120px]"}
+                                value={row.scheduled_time or (proposed_start.split("T")[1][:5] if "T" in proposed_start else "")}
+                                onChange={lambda (e: ChangeEvent) { onTime(index, e.target.value); }}
+                            />
+                        </label>
+                        <button type="button" className="text-[11px] font-semibold text-brand hover:underline" onClick={lambda (e: MouseEvent) { onAuto(index); }}>Auto-schedule</button>
+                        <span className="text-[11px] text-muted">{ "Planner suggestion (editable)" if not row.scheduled_date and not row.scheduled_time else "Your selected time" }</span>
                     </div>
                 </div>
             } else {
@@ -128,6 +160,24 @@ def:pub ChecksCard(preview: FitPreview | None) -> JsxElement {
     </section>
 }
 
+"""ISO start for each row, aligned with all rows including unchecked ones.
+A suggested start is display-only until the student changes it.
+"""
+def:pub proposed_starts(rows: list[DraftRow], preview: FitPreview | None) -> list[str] {
+    starts: list[str] = [];
+    blocks: list[FitBlock] = preview.blocks if preview else [];
+    position = 0;
+    for row in rows {
+        if not row.included {
+            starts = starts + [""];
+            continue;
+        }
+        starts = starts + [blocks[position].start if position < len(blocks) else ""];
+        position = position + 1;
+    }
+    return starts;
+}
+
 """When each checked row would start, matched by position among the checked rows."""
 def:pub when_labels(rows: list[DraftRow], preview: FitPreview | None) -> list[str] {
     labels: list[str] = [];
@@ -149,23 +199,48 @@ def:pub when_labels(rows: list[DraftRow], preview: FitPreview | None) -> list[st
 def:pub ScheduleReview(preview: FitPreview) -> JsxElement {
     problems = [check for check in preview.checks if check.level != "ok"];
     unplaced = len([block for block in preview.blocks if not block.placed]);
+    has selected_day: int = 0;
     <div className="border-t border-line bg-canvas px-4 py-3.5" data-testid="schedule-review">
-        <h3 id="review-h" className="m-0 text-[13px] font-[650] tracking-[-0.1px]">Approve this schedule?</h3>
-        <p className="mt-1 mb-0 text-[12px] text-muted">
-            These times go on your plan only when you approve them. Approved times stay put while they're free; Reschedule or Not today on Today moves one.
+        <h3 id="review-h" className="m-0 text-[13px] font-[650] tracking-[-0.1px]">Review your proposed calendar</h3>
+        <p className="mt-1 mb-3 text-[12px] text-muted">
+            Proposed tasks are outlined. Classes, protected time and existing work are shown too. Nothing is saved until you approve.
         </p>
-        <ol className="m-0 mt-2.5 flex list-none flex-col gap-1.5 p-0" aria-labelledby="review-h">
-            {for block in preview.blocks {
-                <li key={f"{block.position}"} className="rounded-sm border border-line bg-surface px-3 py-2">
-                    <div className="text-[12.5px] font-semibold">{block.title}</div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className={"mr-1 text-[12px] font-semibold tabular-nums " + ("text-brand" if block.placed else "text-danger")}>{block.when_label}</span>
-                        <TierChip tier={block.tier} />
-                        <PlainChip text={f"{block.minutes} min"} />
-                    </div>
-                </li>
-            }}
-        </ol>
+        {for (week_index, view) in enumerate(preview.review_views) {
+            <div key={week_index} className="mb-3 rounded-md border border-line bg-surface" aria-label="Proposed schedule week">
+                <div className="px-3 pt-3 text-[12px] font-semibold text-muted">{view.range_label}</div>
+                <div className="flex gap-1.5 overflow-x-auto px-3 pt-2 desk:hidden" role="tablist" aria-label="Review day">
+                    {for (index, day) in enumerate(view.days) {
+                        <button
+                            key={day.iso_date}
+                            type="button"
+                            role="tab"
+                            aria-selected={index == selected_day}
+                            className={DAY_TAB_ON if index == selected_day else DAY_TAB}
+                            onClick={lambda { selected_day = index; }}
+                        >{day.weekday}</button>
+                    }}
+                </div>
+                <WeekGrid
+                    view={view}
+                    selected={selected_day}
+                    picked={None}
+                    linking={False}
+                    onPick={lambda (item: CalendarItem) { skip; }}
+                    onLink={lambda (title: str, course_id: str) { skip; }}
+                    onUnlink={lambda (title: str) { skip; }}
+                    onClose={lambda { skip; }}
+                    readonly={True}
+                />
+            </div>
+        }}
+        {if not preview.review_views {
+            <p className="mt-2 text-[12px] text-muted">No proposed time slots were found.</p>
+        }}
+        {for block in preview.blocks {
+            if not block.placed {
+                <div key={block.position} className="mt-2 rounded-sm border border-line px-3 py-2 text-[12px] text-danger">{block.title + " — no available time slot"}</div>
+            }
+        }}
         {unplaced > 0 and <p className="mt-2 mb-0 text-[12px] font-semibold text-danger">
             {f"{unplaced} {'subtask has' if unplaced == 1 else 'subtasks have'} no slot this week. Approving still adds {'it' if unplaced == 1 else 'them'}, and the planner places {'it' if unplaced == 1 else 'them'} when time opens up."}
         </p>}

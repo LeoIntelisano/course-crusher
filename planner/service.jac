@@ -65,7 +65,7 @@ def:protect get_calendar(week_offset: int) -> CalendarView {
     return calendar_view(inputs, now, offset);
 }
 
-def proposed_tasks(drafts: list[SubtaskDraft], due: datetime | None) -> list[PlanTask] {
+def proposed_tasks(drafts: list[SubtaskDraft], due: datetime | None, starts: list[datetime | None] = []) -> list[PlanTask] {
     return [
         PlanTask(
             task_id=preview_id(position),
@@ -74,24 +74,93 @@ def proposed_tasks(drafts: list[SubtaskDraft], due: datetime | None) -> list[Pla
             minutes=draft.estimated_duration,
             group_id=PREVIEW_GROUP,
             order=position,
-            due=due
+            due=due,
+            fixed_start=starts[position - 1] if position <= len(starts) else None
         )
         for (position, draft) in enumerate(drafts, start=1)
     ];
 }
 
 """Where the proposed subtasks would land if added now, with the agent's checks."""
-def:protect preview_fit(title: str, due_at: str, subtasks: list[SubtaskDraft]) -> FitResult {
+def:protect preview_fit(title: str, due_at: str, subtasks: list[SubtaskDraft], manual_starts: list[str] | None = None) -> FitResult {
     now = utc_now();
+    if not isinstance(manual_starts, list) {
+        manual_starts = [];
+    }
     zone = parse_zone(ensure_profile().timezone);
     try {
         due = parse_due(due_at, zone, now) if due_at.strip() else None;
         drafts = clean_drafts(subtasks);
+        starts: list[datetime | None] = [];
+        for (position, draft) in enumerate(drafts) {
+            raw = manual_starts[position].strip() if position < len(manual_starts) else "";
+            if not raw {
+                starts = starts + [None];
+                continue;
+            }
+            parsed = datetime.fromisoformat(raw);
+            if parsed.tzinfo is None {
+                parsed = parsed.replace(tzinfo=zone);
+            } else {
+                parsed = parsed.astimezone(zone);
+            }
+            if parsed <= now {
+                raise ValueError(f"Subtask {position + 1}: choose a future start time.");
+            }
+            starts = starts + [parsed];
+        }
+        # A manually chosen slot cannot precede an earlier, manually chosen step.
+        for i in range(len(starts)) {
+            if starts[i] is None {
+                continue;
+            }
+            for j in range(i) {
+                if starts[j] is not None and starts[i] < starts[j] + timedelta(minutes=drafts[j].estimated_duration) {
+                    raise ValueError("Manually scheduled subtasks of the same assignment must follow their breakdown order without overlapping.");
+                }
+            }
+        }
     } except ValueError as err {
         return FitResult(ok=False, error=str(err));
     }
     inputs = load_inputs(now);
-    preview = fit_view(inputs, " ".join(title.split()), due, proposed_tasks(drafts, due), now);
+    proposed = proposed_tasks(drafts, due, starts);
+    plan = plan_tasks(inputs.tasks + proposed, inputs.events, inputs.protected, inputs.rules, now);
+    for (i, start) in enumerate(starts) {
+        if start is None {
+            continue;
+        }
+        spot = placement_for(plan, proposed[i].task_id);
+        if spot is None or not spot.fixed or spot.start != start {
+            return FitResult(ok=False, error=f"Subtask {i + 1}: that time is unavailable. Choose another date or time.");
+        }
+    }
+    # Fixed placements are decided first; verify they do not jump ahead of earlier steps.
+    for (i, start) in enumerate(starts) {
+        if start is None {
+            continue;
+        }
+        current = placement_for(plan, proposed[i].task_id);
+        for j in range(i) {
+            earlier = placement_for(plan, proposed[j].task_id);
+            if earlier is None or current is None or earlier.end > current.start {
+                return FitResult(ok=False, error=f"Subtask {i + 1} must start after the earlier subtasks in this assignment.");
+            }
+        }
+    }
+    # Don't silently shift someone else's already-approved work.
+    original = plan_tasks(inputs.tasks, inputs.events, inputs.protected, inputs.rules, now);
+    for item in inputs.tasks {
+        if item.fixed_start is None {
+            continue;
+        }
+        before = placement_for(original, item.task_id);
+        after = placement_for(plan, item.task_id);
+        if before is not None and before.fixed and (after is None or not after.fixed or after.start != before.start) {
+            return FitResult(ok=False, error="That time conflicts with an already approved assignment.");
+        }
+    }
+    preview = fit_view(inputs, " ".join(title.split()), due, proposed, now);
     return FitResult(ok=True, preview=preview);
 }
 

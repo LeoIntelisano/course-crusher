@@ -288,3 +288,33 @@ test "closing out validates its input" {
         client.close();
     }
 }
+
+test "manual start is honored and a class conflict is rejected in preview" {
+    client = seeded_client();
+    try {
+        course_id = call(client, "list_courses")[0]["id"];
+        call(client, "add_meeting", {
+            "course_id": course_id, "kind": "Lecture", "weekdays": [0, 1, 2, 3, 4, 5, 6],
+            "start": "11:00", "end": "12:00", "location": ""
+        });
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date();
+        slot = tomorrow.strftime("%Y-%m-%d") + "T16:00";
+        good = call(client, "preview_fit", {
+            "title": "Manual time", "due_at": "",
+            "subtasks": [subtask_draft("Review", "Shallow Work", 30)],
+            "manual_starts": [slot]
+        });
+        assert good["ok"], good["error"];
+        assert good["preview"]["blocks"][0]["start"].startswith(slot);
+
+        conflict = call(client, "preview_fit", {
+            "title": "Conflict", "due_at": "",
+            "subtasks": [subtask_draft("Review", "Shallow Work", 30)],
+            "manual_starts": [tomorrow.strftime("%Y-%m-%d") + "T11:15"]
+        });
+        assert not conflict["ok"];
+        assert "unavailable" in conflict["error"];
+    } finally {
+        client.close();
+    }
+}

@@ -10,6 +10,7 @@ import from datetime { date, datetime, time, timedelta }
 import from account.schema { ensure_profile, protected_blocks, rules_for, to_protected_hours }
 import from breakdown { CognitiveTier }
 import from connections.google_link { CalendarStatus, google_entries }
+import from connections.ical_link { ical_entries }
 import from connectors.google_events { CalendarEntry }
 import from courses.matching { CourseMatcher, course_matcher, match_course }
 import from courses.schema {
@@ -258,20 +259,25 @@ def load_inputs(
     window_start = min([plan_start] + ([show_from] if show_from else []));
     window_end = max([plan_end] + ([show_until] if show_until else []));
     (entries, calendar) = google_entries(window_start, window_end);
+    (ical_items, ical_connection) = ical_entries(window_start, window_end);
+    if ical_connection.state == "connected" and calendar.state != "connected" {
+        calendar = CalendarStatus(state="connected", detail="iCal calendar connected", calendars=["iCal"], names=True);
+    }
     matchers = [course_matcher(c.code, c.name, c.tags) for c in courses];
-    (blocking, shown, all_day) = google_events(entries, matchers, calendar.names, overrides);
+    (blocking, shown, all_day) = google_events(entries, matchers, calendar.names and len(entries) > 0, overrides);
+    (ical_blocking, ical_shown, ical_all_day) = google_events(ical_items, matchers, True, overrides);
     return PlanningInputs(
         rules=rules,
         display_name=profile.display_name,
         tasks=[plan_task(a, t) for (_, a, t) in steps],
         info={jid(t): task_info(c, a, t) for (c, a, t) in steps},
-        events=expand_meetings(meetings, dates_between(window_start, window_end, rules), rules) + blocking,
+        events=expand_meetings(meetings, dates_between(window_start, window_end, rules), rules) + blocking + ical_blocking,
         protected=[to_protected_hours(b) for b in protected_blocks()],
         groups=groups,
         calendar=calendar,
         course_count=len(courses),
-        shown=shown,
-        all_day=all_day,
+        shown=shown + ical_shown,
+        all_day=all_day + ical_all_day,
         colors={c.code: c.color for c in courses},
         links=overrides,
         choices=[CourseChoice(id=jid(c), code=c.code, color=c.color) for c in courses]

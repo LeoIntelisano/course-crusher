@@ -23,3 +23,4 @@ import from shell.nav { title_for }
 import from shell.status { free_text }
 
 import connectors.canvas_preview;
+import connections.ical_link;

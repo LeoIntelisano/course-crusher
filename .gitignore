@@ -9,3 +9,4 @@ client_secret*.json
 # Local secrets and installs
 .env
 node_modules/
+.config/

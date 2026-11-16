@@ -22,6 +22,8 @@ default = "server"
 google-auth = "~=2.60"
 google-auth-oauthlib = "~=1.5"
 requests = "~=2.34"
+icalendar = ">=6.3,<8"
+recurring-ical-events = ">=3.8,<4"
 # Zone data for slim images with no system tz database
 tzdata = ">=2024.1"
 

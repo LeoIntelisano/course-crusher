@@ -1,6 +1,7 @@
 """Connections: Google Calendar (busy time only) and the state of Canvas."""
 
 import from "@jac/runtime" { Link }
+import from .ical_link { IcalResult, IcalStatus, connect_ical, disconnect_ical, ical_status, refresh_ical }
 import from .google_link {
     CalendarStatus,
     ConnectResult,
@@ -26,6 +27,8 @@ def:pub ConnectionsPage -> JsxElement {
     ctx: any = usePlanner();
     has status: CalendarStatus | None = None;
     has calendars_text: str = "";
+    has ical: IcalStatus | None = None;
+    has ical_url: str = "";
     has failure: str = "";
     has notice: str = "";
     has busy: bool = False;
@@ -39,6 +42,7 @@ def:pub ConnectionsPage -> JsxElement {
             return;
         }
         status = latest;
+        ical = await ical_status();
         calendars_text = ", ".join(latest.calendars) if latest else "";
     }
 
@@ -98,6 +102,57 @@ def:pub ConnectionsPage -> JsxElement {
         busy = False;
     }
 
+
+    async def saveIcal -> None {
+        busy = True;
+        result: IcalResult | None = None;
+        try {
+            result = await connect_ical(ical_url);
+        } except Exception as err {
+            failure = error_message(err);
+            busy = False;
+            return;
+        }
+        if result and result.ok {
+            ical = result.status;
+            ical_url = "";
+            failure = "";
+            notice = "iCal calendar connected. Your plan now includes its events.";
+            await ctx.refreshToday();
+        } else {
+            failure = result.error if result else "Could not connect this calendar.";
+        }
+        busy = False;
+    }
+
+    async def removeIcal -> None {
+        busy = True;
+        try {
+            ical = await disconnect_ical();
+            ical_url = "";
+            failure = "";
+            notice = "iCal calendar disconnected.";
+            await ctx.refreshToday();
+        } except Exception as err {
+            failure = error_message(err);
+        }
+        busy = False;
+    }
+
+    async def updateIcal -> None {
+        busy = True;
+        try {
+            ical = await refresh_ical();
+            await ctx.refreshToday();
+            ical = await ical_status();
+            failure = "";
+            notice = "Calendar refreshed." if ical and ical.state == "connected" else "Could not refresh this calendar.";
+        } except Exception as err {
+            failure = error_message(err);
+        }
+        busy = False;
+    }
+
     async can with entry {
         await load();
     }
@@ -109,11 +164,34 @@ def:pub ConnectionsPage -> JsxElement {
         <div className={CARD_STACK}>
             <Notice tone="error" message={failure} />
             <Notice tone="success" message={notice} />
+            <section className={CARD} aria-labelledby="ical-h">
+                <CardHeader title="Calendar via iCal link" titleId="ical-h" aside={"Connected" if ical and ical.state == "connected" else "Needs attention" if ical and ical.state == "error" else "Not connected"} />
+                <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-[12.5px] text-body">
+                    <p className="m-0">Import your classes, events, and other commitments so CourseCrusher can build a study plan around your schedule. Your calendar is read-only, so your events won't be changed.</p>
+                    <p className={HINT}>In Google Calendar on desktop, open Settings → your calendar → Integrate calendar → Secret address in iCal format. Copy the link and paste it below. Treat this link like a password.</p>
+                    {if ical and ical.state == "error" {
+                        <Notice tone="error" message={ical.detail} />
+                    }}
+                    {if ical and ical.state != "disconnected" {
+                        <p className="m-0 text-muted">Your private calendar link is saved for this account. The link itself is hidden.</p>
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" className={BUTTON} disabled={busy} onClick={lambda (e: MouseEvent) { updateIcal(); }}>Refresh events</button>
+                            <button type="button" className={BUTTON_DANGER} disabled={busy} onClick={lambda (e: MouseEvent) { removeIcal(); }}>Disconnect iCal</button>
+                        </div>
+                    }}
+                    <form className="flex flex-col gap-2" onSubmit={lambda (e: FormEvent) { e.preventDefault(); saveIcal(); }}>
+                        <label className={LABEL} htmlFor="ical-feed-url">{"Replace calendar link" if ical and ical.state != "disconnected" else "Secret iCal link"}</label>
+                        <input id="ical-feed-url" type="password" className={FIELD} value={ical_url} onChange={lambda (e: ChangeEvent) { ical_url = e.target.value; }} placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" autoComplete="off" />
+                        <div><button type="submit" className={BUTTON_PRIMARY} disabled={busy or not ical_url.strip()}>Save iCal calendar</button></div>
+                    </form>
+                    <p className={HINT}>Google may delay updates to its iCal feed. Private links might be disabled by your school's Google administrator.</p>
+                </div>
+            </section>
             <section className={CARD} aria-labelledby="google-h">
                 <CardHeader title="Google Calendar" titleId="google-h" aside={STATE_TEXT.get(state, "Checking…")} />
                 <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-[12.5px] text-body">
                     <p className="m-0">
-                        CourseCrusher reads your events' names and times (read-only) to plan around them, show them on the Today calendar, and label them with the matching course. Nothing is copied or stored; your calendar is read when you open the app.
+                        Connect your Google Calendar to see upcoming events alongside your assignments. CourseCrusher uses your availability to recommend study times that fit your schedule.
                     </p>
                     {if state == "error" and status {
                         <Notice tone="error" message={status.detail} />
